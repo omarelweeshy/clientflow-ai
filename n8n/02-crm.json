@@ -1,0 +1,155 @@
+{
+  "id": "clientflow02",
+  "name": "ClientFlow \u00b7 CRM synchronization",
+  "active": false,
+  "nodes": [
+    {
+      "id": "e18fcc39-4c1b-428e-b2a1-1e94b275eb14",
+      "name": "Manual demo run",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "077c4922-0e45-40e7-9a19-b1c5be3c44d6",
+      "name": "Scheduled polling",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        160
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "2e451d2a-14b3-4c0e-ab3f-9a1cc79391d6",
+      "name": "Call protected business API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CLIENTFLOW_API_URL + '/automation/crm/tick' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $env.AUTOMATION_SECRET }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 90000
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "dcfd4bec-bd03-4ab3-97e7-3831f8968569",
+      "name": "Integration error \u00b7 inspect execution",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        720,
+        220
+      ],
+      "parameters": {
+        "errorMessage": "ClientFlow API request failed. Inspect service health and the automation ledger before retrying."
+      }
+    },
+    {
+      "id": "1c44a32d-9214-4f14-863b-cd702e451e34",
+      "name": "Business outcome recorded in PostgreSQL",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "3e598bbf-db56-468b-ae9d-822bf84085ee",
+      "name": "Read me \u00b7 no credentials in exports",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -340
+      ],
+      "parameters": {
+        "content": "## ClientFlow \u00b7 CRM synchronization\nThe API owns state, locks, retries, consent and approval.\nSet CLIENTFLOW_API_URL and AUTOMATION_SECRET in the n8n server environment.\nManual demo run exercises the same path as scheduled polling.\nError output preserves the execution for operator review.\nHTTP 200 can contain a business failure: inspect PostgreSQL automation runs.\nNever automatically retry uncertain SMTP deliveries.",
+        "height": 260,
+        "width": 480
+      }
+    }
+  ],
+  "connections": {
+    "Manual demo run": {
+      "main": [
+        [
+          {
+            "node": "Call protected business API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scheduled polling": {
+      "main": [
+        [
+          {
+            "node": "Call protected business API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call protected business API": {
+      "main": [
+        [
+          {
+            "node": "Business outcome recorded in PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Integration error \u00b7 inspect execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "executionTimeout": 300
+  },
+  "pinData": {},
+  "versionId": "f96f98f3-703d-4296-855f-15928543d181",
+  "tags": []
+}

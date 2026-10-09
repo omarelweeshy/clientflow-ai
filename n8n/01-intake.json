@@ -1,0 +1,208 @@
+{
+  "id": "clientflow01",
+  "name": "ClientFlow \u00b7 Intake orchestration",
+  "active": false,
+  "nodes": [
+    {
+      "id": "ffdbfba5-024f-4807-889b-9184ec6f5a04",
+      "name": "Manual demo run",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "88d66037-bfb5-4107-b9ea-7654b21f0f8a",
+      "name": "Scheduled polling",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        160
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "379c0724-d694-4432-82ea-40b23d6b8a5d",
+      "name": "Call protected business API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.CLIENTFLOW_API_URL + '/automation/pending' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $env.AUTOMATION_SECRET }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 90000
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "96aef172-f948-4a00-ab5c-930efaab19eb",
+      "name": "Integration error \u00b7 inspect execution",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        720,
+        220
+      ],
+      "parameters": {
+        "errorMessage": "ClientFlow API request failed. Inspect service health and the automation ledger before retrying."
+      }
+    },
+    {
+      "id": "b8f55d64-663c-483c-a0a4-420fea46f44b",
+      "name": "One item per pending lead",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "fieldToSplitOut": "leads",
+        "options": {}
+      }
+    },
+    {
+      "id": "85204fba-11c1-459d-af57-244b9ddb9c79",
+      "name": "Validate extract score and prepare draft",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CLIENTFLOW_API_URL + '/automation/leads/' + $json.id + '/process' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $env.AUTOMATION_SECRET }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 90000
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "4f046e36-b49b-41e0-b36b-0214344a434f",
+      "name": "Read me \u00b7 no credentials in exports",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -340
+      ],
+      "parameters": {
+        "content": "## ClientFlow \u00b7 Intake orchestration\nThe API owns state, locks, retries, consent and approval.\nSet CLIENTFLOW_API_URL and AUTOMATION_SECRET in the n8n server environment.\nManual demo run exercises the same path as scheduled polling.\nError output preserves the execution for operator review.\nHTTP 200 can contain a business failure: inspect PostgreSQL automation runs.\nNever automatically retry uncertain SMTP deliveries.",
+        "height": 260,
+        "width": 480
+      }
+    }
+  ],
+  "connections": {
+    "Manual demo run": {
+      "main": [
+        [
+          {
+            "node": "Call protected business API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scheduled polling": {
+      "main": [
+        [
+          {
+            "node": "Call protected business API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call protected business API": {
+      "main": [
+        [
+          {
+            "node": "One item per pending lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Integration error \u00b7 inspect execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "One item per pending lead": {
+      "main": [
+        [
+          {
+            "node": "Validate extract score and prepare draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate extract score and prepare draft": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Integration error \u00b7 inspect execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "executionTimeout": 300
+  },
+  "pinData": {},
+  "versionId": "b2f643f9-cdcf-4966-a430-d88d5a10a37a",
+  "tags": []
+}

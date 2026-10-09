@@ -1,0 +1,13 @@
+{
+  "name": "Nadia Farouk",
+  "email": "nadia.demo@example.com",
+  "company": "Atlas Studio",
+  "website": "https://example.com",
+  "service": "AI automation",
+  "enquiry": "We want to connect our enquiry form to a CRM, extract project requirements and prepare responses for human approval.",
+  "budget": "2000-5000",
+  "deadline": "2026-12-15",
+  "contact_method": "email",
+  "consent": true,
+  "source": "portfolio"
+}

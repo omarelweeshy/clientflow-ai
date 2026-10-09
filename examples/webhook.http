@@ -1,0 +1,12 @@
+# Public intake also accepts server-to-server portfolio submissions.
+# Re-deliver the SAME payload with the SAME key to verify idempotency.
+POST http://localhost:8010/public/intake
+Content-Type: application/json
+Idempotency-Key: example-enquiry-0001
+X-Correlation-ID: 1bd51dc2-4af7-456c-a999-bd2f166e26c2
+
+< ./intake.json
+
+### Private automation API. Replace from local .env, never commit a real secret.
+GET http://localhost:8010/automation/pending
+Authorization: Bearer {{$dotenv AUTOMATION_SECRET}}
