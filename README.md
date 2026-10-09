@@ -156,7 +156,7 @@ Adapters follow the [Ollama structured-output schema API](https://docs.ollama.co
 
 Local ports bind only to loopback. Administration uses a signed HTTP-only session, a password hash and session-bound CSRF tokens. Public intake cannot invoke administrator or automation endpoints. Secrets stay in the environment; logs exclude raw provider errors and the automation ledger stores IDs rather than enquiry payloads.
 
-This is a usable single-organization MVP, **not a fully hardened production deployment**. Before linking a public portfolio: configure HTTPS, secure cookies, a real booking URL, reliable email, gateway rate limiting, backups, retention/deletion policy, dependency monitoring, monitoring/alerts, worker isolation and provider reconciliation. n8n is a trusted administrator surface with environment access enabled for these local workflows. Never expose its editor publicly without hardened access controls. See [threat model and limitations](docs/SECURITY.md).
+This is a usable single-organization MVP, **not a fully hardened production deployment**. Before accepting public enquiries: configure HTTPS, secure cookies, a real booking URL, reliable email, gateway rate limiting, backups, retention/deletion policy, dependency monitoring, monitoring/alerts, worker isolation and provider reconciliation. n8n is a trusted administrator surface with environment access enabled for these local workflows. Never expose its editor publicly without hardened access controls. See [threat model and limitations](docs/SECURITY.md).
 
 ## Troubleshooting
 

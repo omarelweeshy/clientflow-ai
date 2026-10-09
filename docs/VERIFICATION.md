@@ -69,7 +69,7 @@ No final automated check failed unexpectedly. The intentionally unavailable n8n 
 | Slack | Implemented, **not exercised live**; disabled by default; failure-notification workflow verified as a disabled no-op |
 | Cal.com / booking | Configurable URL only; no live booking or OAuth integration; booking recorded manually |
 | Inbound replies | Manually recorded; no mailbox integration |
-| GitHub Actions | Workflow files provided; commands verified locally; no remote Actions run or public repository publication in this task |
+| GitHub Actions | Public repository published; [initial release CI](https://github.com/omarelweeshy/clientflow-ai/actions/runs/37925583895) passed both backend/PostgreSQL and frontend jobs for commit `8c5ddc0` |
 
 ## Security and production limits
 
@@ -86,6 +86,7 @@ The application runs end to end **in local demo mode**. It is not claimed ready 
 - Verified configuration generation in an empty temporary setup and refusal to overwrite an existing `.env`.
 - Added portable clone instructions, a reviewer guide, engineering case study, contribution/security reporting guidance and dependency-update configuration.
 - Verified staged files exclude local credentials, environment overrides, runtime volumes and generated TypeScript cache; known-token checks and `git diff --cached --check` pass.
+- Created [omarelweeshy/clientflow-ai](https://github.com/omarelweeshy/clientflow-ai), pushed `main`, configured repository topics and private vulnerability reporting, and confirmed the initial remote GitHub Actions run passed.
 
 ## Exact run commands
 
