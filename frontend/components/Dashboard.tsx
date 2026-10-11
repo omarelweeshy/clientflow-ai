@@ -54,6 +54,7 @@ const nav = [
   { path: "runs", name: "Automation runs", icon: GitBranch },
   { path: "settings", name: "Settings", icon: Settings2 },
 ];
+const publicDemo = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 const statuses = [
   "NEW",
   "PROCESSING",
@@ -215,7 +216,8 @@ export default function Dashboard({ view }: { view: string[] }) {
         <div className="workspace-label">
           <span className="workspace-avatar">O</span>
           <div>
-            Omar’s workspace<small>Freelance operations</small>
+            {publicDemo ? "Demo workspace" : "Omar’s workspace"}
+            <small>Freelance operations</small>
           </div>
           <MoreHorizontal size={16} />
         </div>
@@ -261,12 +263,13 @@ export default function Dashboard({ view }: { view: string[] }) {
             }
           >
             <LogOut size={17} />
-            Sign out
+            {publicDemo ? "Demo welcome" : "Sign out"}
           </button>
           <div className="profile">
             <span>OE</span>
             <div>
-              Omar<small>Administrator</small>
+              {publicDemo ? "Visitor" : "Omar"}
+              <small>{publicDemo ? "Demo operator" : "Administrator"}</small>
             </div>
             <span className="online-dot" />
           </div>
@@ -298,7 +301,9 @@ export default function Dashboard({ view }: { view: string[] }) {
             <span className="live-pill">
               <i />{" "}
               {overview
-                ? "API connected"
+                ? publicDemo
+                  ? "Browser simulation"
+                  : "API connected"
                 : loading
                   ? "Connecting"
                   : "API unavailable"}
@@ -1573,6 +1578,7 @@ function SettingsEditor({
               <input
                 type="checkbox"
                 checked={rules.notifications_enabled}
+                disabled={publicDemo}
                 onChange={(e) =>
                   setRules({
                     ...rules,
@@ -1595,6 +1601,7 @@ function SettingsEditor({
                   <input
                     type="checkbox"
                     checked={rules.safe_automation}
+                    disabled={publicDemo}
                     onChange={(e) =>
                       setRules({ ...rules, safe_automation: e.target.checked })
                     }
@@ -1620,8 +1627,9 @@ function SettingsEditor({
               </div>
             ))}
             <p className="muted small-text">
-              Credentials stay in server environment variables. Provider names
-              show configuration, not live health.
+              {publicDemo
+                ? "This demo has no backend connection, provider credentials or live n8n execution. Run the Docker edition to inspect the real workflow orchestration."
+                : "Credentials stay in server environment variables. Provider names show configuration, not live health."}
             </p>
           </section>
         </div>

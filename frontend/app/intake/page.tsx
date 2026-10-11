@@ -3,6 +3,7 @@ import { useRef, useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowRight, Check, Workflow, LockKeyhole } from "lucide-react";
 import { api } from "@/lib/api";
+const publicDemo = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 const defaultServices = [
   "AI automation",
   "Workflow integration",
@@ -14,7 +15,9 @@ const defaultServices = [
 export default function Intake() {
   const [services, setServices] = useState(defaultServices);
   useEffect(() => {
-    api<{services: string[]}>("/public/config").then(data => setServices(data.services)).catch(() => {});
+    api<{ services: string[] }>("/public/config")
+      .then((data) => setServices(data.services))
+      .catch(() => {});
   }, []);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -39,13 +42,12 @@ export default function Intake() {
           <p className="eyebrow">LET’S MAKE WORK FLOW</p>
           <h1>
             A good project
-            <br />{" "}
-            starts with a<br />{" "}
-            <em>clear conversation.</em>
+            <br /> starts with a<br /> <em>clear conversation.</em>
           </h1>
           <p>
-            Tell us what you want to build or improve. We’ll review your needs
-            and get back to you with a thoughtful next step.
+            {publicDemo
+              ? "Try the enquiry workflow using fictional details. Your sample will appear in this browser’s demo workspace. Nobody will contact you."
+              : "Tell us what you want to build or improve. We’ll review your needs and get back to you with a thoughtful next step."}
           </p>
           <div className="intake-steps">
             <div>
@@ -71,8 +73,10 @@ export default function Intake() {
             </div>
           </div>
           <p className="privacy">
-            <LockKeyhole size={16} /> Used only to respond to your project
-            enquiry.
+            <LockKeyhole size={16} />{" "}
+            {publicDemo
+              ? "Use fictional details. Stored only in this browser; reset the demo to remove them."
+              : "Used only to respond to your project enquiry."}
           </p>
         </section>
         <section className="intake-card">
@@ -81,13 +85,23 @@ export default function Intake() {
               <span className="success-icon">
                 <Check size={32} />
               </span>
-              <p className="eyebrow">ENQUIRY RECEIVED</p>
-              <h2>It’s in good hands.</h2>
+              <p className="eyebrow">
+                {publicDemo ? "DEMO ENQUIRY CREATED" : "ENQUIRY RECEIVED"}
+              </p>
+              <h2>
+                {publicDemo ? "Your sample is ready." : "It’s in good hands."}
+              </h2>
               <p>
-                Your enquiry has been saved. We’ll review the details before
-                responding.
+                {publicDemo
+                  ? "Open the demo workspace to review its score, edit the response and try simulated delivery. Nothing was submitted to a server."
+                  : "Your enquiry has been saved. We’ll review the details before responding."}
               </p>
               <small>Reference: {receipt}</small>
+              {publicDemo && (
+                <Link className="button primary" href="/dashboard/pipeline">
+                  Review demo enquiry <ArrowRight size={16} />
+                </Link>
+              )}
               <button
                 className="button"
                 onClick={() => {

@@ -1,0 +1,103 @@
+/* Verify the public browser simulation. Stops before mutations unless its banner is present. */
+const { chromium } = require('../frontend/node_modules/playwright');
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const origin = process.env.CLIENTFLOW_URL || 'http://localhost:3011';
+const storageKey = 'clientflow-public-demo-v1';
+
+(async () => {
+  const browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {}) });
+  try {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
+    const page = await context.newPage();
+    const errors = [], apiCalls = [];
+    page.on('pageerror', error => errors.push(error.message));
+    page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/')) apiCalls.push(request.url()); });
+    const shots = path.resolve(__dirname, '../.release-check/public-demo-screenshots');
+    await fs.mkdir(shots, { recursive: true });
+    async function capture(name) {
+      await page.locator('.loading').waitFor({ state: 'detached' });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, name + ' overflows');
+      await page.screenshot({ path: path.join(shots, name), fullPage: true });
+    }
+    await page.goto(origin + '/dashboard');
+    await page.getByRole('complementary', { name: 'Public demo information' }).waitFor();
+    await page.getByRole('heading', { name: 'Keep good work moving.', exact: true }).waitFor();
+    await page.getByText('Browser simulation', { exact: true }).waitFor();
+    await capture('overview-desktop.png');
+    await page.goto(origin + '/dashboard/pipeline');
+    await page.getByRole('link', { name: 'Open Nadia Farouk', exact: true }).click();
+    await page.getByRole('heading', { name: 'Automation timeline', exact: true }).waitFor();
+    const subject = page.getByRole('textbox', { name: 'Subject', exact: true }).first();
+    await subject.fill('A fictional reviewer response');
+    await page.getByRole('button', { name: 'Save edit', exact: true }).first().click();
+    await page.getByText('Draft saved. Approval reset for the edited version.', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Approve', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Send approved', exact: true }).first().click();
+    await page.getByText('Email sent', { exact: true }).waitFor();
+    await page.getByLabel('Reply received').check();
+    await page.getByText('Followup cancelled', { exact: true }).first().waitFor();
+    await capture('lead-desktop.png');
+    await page.reload();
+    await page.getByText('Email sent', { exact: true }).waitFor();
+    assert.equal(await page.getByLabel('Reply received').isChecked(), true);
+    await page.goto(origin + '/dashboard/runs');
+    await page.getByLabel('Only unresolved failures').check();
+    await page.getByRole('button', { name: 'Retry', exact: true }).first().click();
+    await page.getByText('Retry completed. Inspect the new run for the result.', { exact: true }).waitFor();
+    await page.goto(origin + '/intake');
+    await page.getByLabel('Full name').fill('Public Demo Reviewer');
+    await page.getByRole('textbox', { name: /^Email/ }).fill('public.reviewer@example.com');
+    await page.getByLabel('Company', { exact: true }).fill('Fictional Review Studio');
+    await page.getByLabel('What can we help with?').selectOption('AI automation');
+    await page.getByLabel('Describe your project').fill('We need a workflow for enquiry qualification with draft approval and a clear audit trail.');
+    await page.getByLabel('Budget range').selectOption('2000-5000');
+    const deadline = new Date(); deadline.setDate(deadline.getDate() + 45);
+    await page.getByLabel('Desired deadline').fill(deadline.toISOString().slice(0, 10));
+    await page.getByRole('checkbox').check();
+    await page.getByRole('button', { name: 'Send project enquiry', exact: true }).click();
+    await page.getByRole('heading', { name: 'Your sample is ready.', exact: true }).waitFor();
+    await page.getByRole('link', { name: /Review demo enquiry/ }).click();
+    await page.getByRole('link', { name: 'Open Public Demo Reviewer', exact: true }).waitFor();
+    const isolated = await browser.newContext();
+    const other = await isolated.newPage();
+    await other.goto(origin + '/dashboard/pipeline');
+    await other.getByRole('link', { name: 'Open Nadia Farouk', exact: true }).waitFor();
+    assert.equal(await other.getByRole('link', { name: 'Open Public Demo Reviewer', exact: true }).count(), 0);
+    assert.equal(await other.evaluate(key => JSON.parse(localStorage.getItem(key)).details.length, storageKey), 10);
+    await isolated.close();
+    await page.goto(origin + '/dashboard/settings');
+    await page.getByRole('heading', { name: 'Qualification rules', exact: true }).waitFor();
+    await page.getByLabel('Enable automatic initial responses').isDisabled().then(disabled => assert.equal(disabled, true));
+    await page.getByLabel('Enable configured Slack notifications').isDisabled().then(disabled => assert.equal(disabled, true));
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(origin + '/dashboard');
+    await capture('overview-mobile.png');
+    await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
+    await page.getByRole('link', { name: 'Lead pipeline', exact: true }).click();
+    await page.getByRole('link', { name: 'Open Public Demo Reviewer', exact: true }).click();
+    await capture('lead-mobile.png');
+    await page.goto(origin + '/intake');
+    await capture('intake-mobile.png');
+    await page.goto(origin + '/login');
+    await page.getByRole('button', { name: 'Explore demo', exact: true }).waitFor();
+    assert.equal(await page.getByLabel('Administrator password').count(), 0);
+    await page.getByRole('button', { name: 'Explore demo', exact: true }).click();
+    await page.waitForURL('**/dashboard');
+    await page.getByRole('button', { name: 'Reset demo', exact: true }).click();
+    await page.getByRole('button', { name: 'Confirm reset', exact: true }).click();
+    await page.getByRole('heading', { name: 'Keep good work moving.', exact: true }).waitFor();
+    await page.getByText('Browser simulation', { exact: true }).waitFor();
+    assert.equal(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).details.length, storageKey), 10);
+    assert.deepEqual(apiCalls, [], 'UI must not call the private server API');
+    for (const route of ['/api/admin/leads', '/api/automation/pending', '/api/public/config']) {
+      const response = await context.request.get(origin + route);
+      assert.equal(response.status(), 403, route + ' must fail closed');
+    }
+    const post = await context.request.post(origin + '/api/public/intake', { data: { name: 'Fictional' } });
+    assert.equal(post.status(), 403);
+    assert.deepEqual(errors, []);
+    console.log('PASS: public demo workflow, reload persistence, isolated visitors, reset, mobile layout, no UI API calls, server API blocked, no runtime errors.');
+  } finally { await browser.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

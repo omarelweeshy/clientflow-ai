@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 const config: NextConfig = {
-  output: "standalone",
+  output: process.env.NEXT_PUBLIC_DEMO_MODE === "true" ? undefined : "standalone",
   poweredByHeader: false,
   async headers() {
     return [

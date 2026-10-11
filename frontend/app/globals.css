@@ -289,6 +289,66 @@ small {
   display: flex;
   min-height: 100vh;
 }
+.demo-banner {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  padding: 14px 24px;
+  background: #e7f1dc;
+  color: #203c31;
+  border-bottom: 1px solid #c6d8ba;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+.demo-banner strong {
+  display: block;
+  font-size: 13px;
+}
+.demo-banner span {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.demo-banner-actions {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.demo-banner-actions a,
+.demo-banner-actions button {
+  font-size: 12px;
+  font-weight: 600;
+}
+.demo-banner-actions button {
+  background: #fff;
+  color: #203c31;
+  border: 1px solid #b8caaa;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+.demo-active .sidebar {
+  top: var(--demo-banner-height, 84px);
+}
+.demo-active .workspace,
+.demo-active .auth-page {
+  min-height: calc(100vh - var(--demo-banner-height, 84px));
+}
+@media (max-width: 900px) {
+  .demo-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 12px 18px;
+    gap: 8px;
+  }
+  .demo-banner-actions {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+}
 .sidebar {
   width: 238px;
   background: var(--deep);

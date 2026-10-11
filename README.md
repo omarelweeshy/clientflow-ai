@@ -15,6 +15,8 @@ ClientFlow AI is an independent portfolio and internal-operations project inspir
 
 Start with the [five-minute reviewer guide](docs/REVIEWER_GUIDE.md), [engineering case study](docs/CASE_STUDY.md) or [verification evidence](docs/VERIFICATION.md).
 
+The [Vercel portfolio edition](docs/VERCEL.md) runs an isolated browser simulation with fictional data. The Docker edition below runs the real backend, database and n8n workflows. Public mode never connects to the private workspace or sends external messages.
+
 ![Operations overview](docs/screenshots/overview-desktop.png)
 
 ## Run the complete local demo

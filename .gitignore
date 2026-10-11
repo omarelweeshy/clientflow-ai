@@ -21,3 +21,4 @@ local-secrets/
 *.key
 .DS_Store
 Thumbs.db
+.vercel/

@@ -47,3 +47,34 @@ jobs:
         working-directory: frontend
       - run: npm run lint && npm run typecheck && npm test && npm run build
         working-directory: frontend
+  public-demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_DEMO_MODE: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - name: Start demo and wait for readiness
+        working-directory: frontend
+        run: |
+          mkdir -p ../.release-check
+          npm run start -- --hostname 127.0.0.1 --port 3011 > ../.release-check/public-demo-server.log 2>&1 &
+          node --input-type=module -e 'for (let i=0;i<60;i++) { try { const r=await fetch("http://localhost:3011/login"); if(r.ok) process.exit(0); } catch {} await new Promise(r=>setTimeout(r,1000)); } process.exit(1);'
+      - run: node scripts/public-demo-smoke.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-demo-browser-evidence
+          path: .release-check/public-demo-screenshots
+          retention-days: 7

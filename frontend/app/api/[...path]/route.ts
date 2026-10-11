@@ -4,6 +4,12 @@ async function proxy(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
 ) {
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
+    return NextResponse.json(
+      { detail: "The public demo runs in your browser. Server API access is disabled." },
+      { status: 403, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   const { path } = await params;
   if (
     !["public", "auth", "admin", "health"].includes(path[0]) ||

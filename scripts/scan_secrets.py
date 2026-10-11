@@ -32,7 +32,7 @@ if password_file.exists():
     secrets.append(password_file.read_text().strip())
 for name in set(files):
     parts = Path(name).parts
-    if any(part in {"local-secrets", ".venv", ".venv312", "node_modules", ".next"} for part in parts):
+    if any(part in {"local-secrets", ".venv", ".venv312", "node_modules", ".next", ".vercel"} for part in parts):
         raise SystemExit(f"FAIL: private or generated path included: {name}")
     if (Path(name).name.startswith(".env") and Path(name).name != ".env.example") or Path(name).suffix in {".pem", ".key", ".db"}:
         raise SystemExit(f"FAIL: private configuration included: {name}")

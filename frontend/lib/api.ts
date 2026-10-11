@@ -8,6 +8,10 @@ export async function api<T>(
   body?: unknown,
   extra?: Record<string, string>,
 ): Promise<T> {
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
+    const { demoApi } = await import("./demo-api");
+    return demoApi<T>(path, method, body, extra);
+  }
   const response = await fetch(`/api${path}`, {
     method,
     headers: {
