@@ -1,5 +1,7 @@
 # Public portfolio demo on Vercel
 
+**Live demo:** <https://clientflow-ai-eight.vercel.app> · Public access verified without login on 2026-10-12.
+
 The Vercel edition is an interactive browser simulation. It demonstrates the interface and workflow with ten fictional sample leads. It has no connection to the private FastAPI service, PostgreSQL database, n8n editor or provider credentials.
 
 ## Deployment settings
@@ -25,6 +27,10 @@ No request from the demo interface calls the server API. The Next.js API proxy r
 ## Verification
 
 `frontend/tests/demo.test.mjs` covers isolated state, intake idempotency, revision approval, duplicate delivery, follow-up ordering, cancellation, failure recovery and unsupported-route rejection. `scripts/public-demo-smoke.cjs` checks the production UI on desktop/mobile, refresh persistence, separate browser contexts, reset, absence of UI API calls and HTTP 403 for server endpoints. GitHub Actions builds both the default Docker-compatible frontend and the public mode, then runs browser checks.
+
+On 2026-10-12, all nine frontend tests, lint/type checking, production builds and all three [GitHub Actions jobs](https://github.com/omarelweeshy/clientflow-ai/actions/runs/38176032539) passed for implementation commit `6b7687c`. The same browser smoke passed against the live production URL without Vercel authentication. Desktop/mobile screenshots were inspected. The Docker backend has not been moved to Vercel.
+
+![Public demo with simulation disclosure](screenshots/public-demo-desktop.png)
 
 To preview locally from `frontend`:
 

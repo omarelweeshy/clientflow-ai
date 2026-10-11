@@ -5,6 +5,8 @@
 
 **Next.js · TypeScript · FastAPI · PostgreSQL · n8n · Docker**
 
+**[Try the interactive demo ↗](https://clientflow-ai-eight.vercel.app)** · No login required · Fictional data · Browser-only simulation
+
 **From an unstructured enquiry to an actionable opportunity, with a human in control.**
 
 ClientFlow AI captures portfolio enquiries, extracts requirements, applies transparent qualification rules, maintains an internal CRM opportunity and prepares responses for approval. Its operations dashboard shows the complete history and lets an administrator edit, approve, deliver and recover failed work.

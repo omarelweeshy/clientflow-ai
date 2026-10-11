@@ -88,6 +88,16 @@ The application runs end to end **in local demo mode**. It is not claimed ready 
 - Verified staged files exclude local credentials, environment overrides, runtime volumes and generated TypeScript cache; known-token checks and `git diff --cached --check` pass.
 - Created [omarelweeshy/clientflow-ai](https://github.com/omarelweeshy/clientflow-ai), pushed `main`, configured repository topics and private vulnerability reporting, and confirmed the initial remote GitHub Actions run passed.
 
+## Public Vercel demo, 2026-10-12
+
+- Deployed the isolated browser simulation at <https://clientflow-ai-eight.vercel.app>; anonymous HTTP 200 and automatic dashboard entry verified.
+- Nine frontend tests passed, including six new demo workflow tests. Lint, type checking and public-mode production build passed.
+- All three [remote CI jobs](https://github.com/omarelweeshy/clientflow-ai/actions/runs/38176032539) passed for implementation commit `6b7687c`: backend/PostgreSQL, default frontend and public-demo production browser checks.
+- The complete browser smoke also passed against the live Vercel alias: enquiry creation, draft edit/approval, simulated send, reply cancellation, retry, reload persistence, isolated browser profiles, reset, mobile layout and no runtime errors.
+- Public UI made no API calls. Direct server API requests returned HTTP 403, including public intake and private administration/automation paths.
+- Public data, qualification, email and n8n activity are explicitly simulated. No private database, local enquiries or provider credentials were deployed. The real Docker backend and n8n remain separate.
+- See [Vercel deployment settings and limits](VERCEL.md). Browser storage is not encrypted and is intended only for fictional data.
+
 ## Exact run commands
 
 ```powershell
