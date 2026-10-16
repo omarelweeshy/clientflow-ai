@@ -72,7 +72,7 @@ jobs:
           npm run start -- --hostname 127.0.0.1 --port 3011 > ../.release-check/public-demo-server.log 2>&1 &
           node --input-type=module -e 'for (let i=0;i<60;i++) { try { const r=await fetch("http://localhost:3011/login"); if(r.ok) process.exit(0); } catch {} await new Promise(r=>setTimeout(r,1000)); } process.exit(1);'
       - run: node scripts/public-demo-smoke.cjs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: public-demo-browser-evidence
