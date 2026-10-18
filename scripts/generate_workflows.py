@@ -86,6 +86,13 @@ for index, (slug, title, path, method, minutes) in enumerate(
             "POST",
             5,
         ),
+        (
+            "06-maintenance",
+            "ClientFlow · Maintenance and delivery reconciliation",
+            "/automation/maintenance/tick",
+            "POST",
+            10,
+        ),
     ]
 ):
     nodes = [
@@ -172,4 +179,4 @@ for index, (slug, title, path, method, minutes) in enumerate(
         "tags": [],
     }
     (root / f"{slug}.json").write_text(json.dumps(workflow, indent=2), encoding="utf-8")
-print("Generated five n8n workflows without embedded credentials.")
+print("Generated six n8n workflows without embedded credentials.")

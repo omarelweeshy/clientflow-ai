@@ -39,7 +39,7 @@ cd clientflow-ai
 sh scripts/start-demo.sh
 ```
 
-The startup script generates configuration when missing, starts the stack, seeds fictional data, imports and publishes all five n8n schedules. On Linux/macOS use `sh scripts/start-demo.sh`. The configuration script preserves an existing `.env`. The administrator password is generated in `local-secrets/admin-password.txt`. Both paths are ignored by Git. Read the password locally, then sign in at [localhost:3010/login](http://localhost:3010/login).
+The startup script generates configuration when missing, starts the stack, seeds fictional data, imports and publishes all six n8n schedules. On Linux/macOS use `sh scripts/start-demo.sh`. The configuration script preserves an existing `.env`. The administrator password is generated in `local-secrets/admin-password.txt`. Both paths are ignored by Git. Read the password locally, then sign in at [localhost:3010/login](http://localhost:3010/login).
 
 - Dashboard: [localhost:3010/dashboard](http://localhost:3010/dashboard)
 - Portfolio intake: [localhost:3010/intake](http://localhost:3010/intake)
@@ -112,7 +112,7 @@ The optional safe-automation switch is disabled by default. Explicitly enabling 
 
 ## n8n
 
-Five credential-free exports are included in `n8n/`: intake, CRM, approved-email delivery, follow-up scheduling/stop checks and failure notification. Both manual and scheduled triggers call protected backend operations. Error outputs retain execution context for review.
+Six credential-free exports are included in `n8n/`: intake, CRM, approved-email delivery, follow-up scheduling/stop checks, failure notification, and maintenance (ages stuck send intents into a reconciliation queue and prunes expired rate buckets). Both manual and scheduled triggers call protected backend operations. Error outputs retain execution context for review.
 
 The startup script enables scheduled follow-up checks and approved delivery in the local n8n instance. Plain `docker compose up` without the startup script requires the import/publish steps below. The default `ORCHESTRATION_MODE=app` processes intake immediately, so the demo works even before workflow import. Use `ORCHESTRATION_MODE=n8n`, import and publish the workflows to let n8n process stored pending intake. See [exact import, execution and publishing commands](docs/N8N.md).
 

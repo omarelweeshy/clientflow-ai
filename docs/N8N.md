@@ -15,7 +15,7 @@ docker compose exec -e N8N_RUNNERS_BROKER_PORT=5681 n8n n8n execute --id=clientf
 docker compose exec -e N8N_RUNNERS_BROKER_PORT=5681 n8n n8n execute --id=clientflow05
 ```
 
-Exports are initially unpublished. The start-demo scripts import and publish all five schedules. CLI execution uses a separate broker port because the running editor uses 5679. For scheduled operation, set `ORCHESTRATION_MODE=n8n` in `.env`, recreate the API, then publish the five imported workflows:
+Exports are initially unpublished. The start-demo scripts import and publish all six schedules. CLI execution uses a separate broker port because the running editor uses 5679. For scheduled operation, set `ORCHESTRATION_MODE=n8n` in `.env`, recreate the API, then publish the six imported workflows:
 
 ```powershell
 docker compose up -d --force-recreate api

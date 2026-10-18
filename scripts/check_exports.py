@@ -3,7 +3,7 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 workflows = list((root / "n8n").glob("*.json"))
-assert len(workflows) == 5
+assert len(workflows) == 6
 for file in workflows:
     data = json.loads(file.read_text(encoding="utf-8"))
     names = {n["name"] for n in data["nodes"]}
@@ -21,5 +21,5 @@ for file in workflows:
                 assert target["node"] in names
     assert "sk-" not in file.read_text()
 print(
-    "Five exports: valid node references, error outputs and environment-only authentication."
+    "Six exports: valid node references, error outputs and environment-only authentication."
 )

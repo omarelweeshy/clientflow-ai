@@ -33,6 +33,9 @@ jobs:
       - run: python scripts/scan_secrets.py
       - run: alembic upgrade head && alembic current && pytest -q
         working-directory: backend
+      - name: Migrations reverse and reapply cleanly
+        run: alembic downgrade base && alembic upgrade head && alembic current
+        working-directory: backend
   frontend:
     runs-on: ubuntu-latest
     timeout-minutes: 15

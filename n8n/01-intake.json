@@ -4,7 +4,7 @@
   "active": false,
   "nodes": [
     {
-      "id": "ffdbfba5-024f-4807-889b-9184ec6f5a04",
+      "id": "d1d60286-bcc9-4484-9496-a3bd3fef2b76",
       "name": "Manual demo run",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
@@ -15,7 +15,7 @@
       "parameters": {}
     },
     {
-      "id": "88d66037-bfb5-4107-b9ea-7654b21f0f8a",
+      "id": "726d9972-c0ec-4cd2-830d-4e244939c881",
       "name": "Scheduled polling",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -35,7 +35,7 @@
       }
     },
     {
-      "id": "379c0724-d694-4432-82ea-40b23d6b8a5d",
+      "id": "32909968-ec8c-47b9-9ef6-b2157eb47ac6",
       "name": "Call protected business API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -62,7 +62,7 @@
       "onError": "continueErrorOutput"
     },
     {
-      "id": "96aef172-f948-4a00-ab5c-930efaab19eb",
+      "id": "aa3976ab-e4db-40ad-9166-cc5e6ffae218",
       "name": "Integration error \u00b7 inspect execution",
       "type": "n8n-nodes-base.stopAndError",
       "typeVersion": 1,
@@ -75,7 +75,7 @@
       }
     },
     {
-      "id": "b8f55d64-663c-483c-a0a4-420fea46f44b",
+      "id": "d8fc430a-f3a0-4cb4-9f17-521091939d55",
       "name": "One item per pending lead",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
@@ -89,7 +89,7 @@
       }
     },
     {
-      "id": "85204fba-11c1-459d-af57-244b9ddb9c79",
+      "id": "e9b38cc2-c1c1-4e2f-b523-6a21afa18807",
       "name": "Validate extract score and prepare draft",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -116,7 +116,7 @@
       "onError": "continueErrorOutput"
     },
     {
-      "id": "4f046e36-b49b-41e0-b36b-0214344a434f",
+      "id": "b7437960-8e0a-487f-bbfe-372e03f4407c",
       "name": "Read me \u00b7 no credentials in exports",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -203,6 +203,6 @@
     "executionTimeout": 300
   },
   "pinData": {},
-  "versionId": "b2f643f9-cdcf-4966-a430-d88d5a10a37a",
+  "versionId": "d0b173c0-6287-40e4-9324-b38509b610a7",
   "tags": []
 }

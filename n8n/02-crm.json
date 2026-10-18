@@ -4,7 +4,7 @@
   "active": false,
   "nodes": [
     {
-      "id": "e18fcc39-4c1b-428e-b2a1-1e94b275eb14",
+      "id": "31b737bf-93a4-4a89-9a85-13ed5e3c6e06",
       "name": "Manual demo run",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
@@ -15,7 +15,7 @@
       "parameters": {}
     },
     {
-      "id": "077c4922-0e45-40e7-9a19-b1c5be3c44d6",
+      "id": "fa4ebeb7-a274-4834-a6e2-edd7ef1d732c",
       "name": "Scheduled polling",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -35,7 +35,7 @@
       }
     },
     {
-      "id": "2e451d2a-14b3-4c0e-ab3f-9a1cc79391d6",
+      "id": "4285c87d-98cf-4b42-9df6-0621d3112b32",
       "name": "Call protected business API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -62,7 +62,7 @@
       "onError": "continueErrorOutput"
     },
     {
-      "id": "dcfd4bec-bd03-4ab3-97e7-3831f8968569",
+      "id": "462d9fdb-cc7e-40da-936f-aa6ef5ba73cc",
       "name": "Integration error \u00b7 inspect execution",
       "type": "n8n-nodes-base.stopAndError",
       "typeVersion": 1,
@@ -75,7 +75,7 @@
       }
     },
     {
-      "id": "1c44a32d-9214-4f14-863b-cd702e451e34",
+      "id": "61c9f96e-8c87-420f-afa8-223cfae70fe9",
       "name": "Business outcome recorded in PostgreSQL",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
@@ -86,7 +86,7 @@
       "parameters": {}
     },
     {
-      "id": "3e598bbf-db56-468b-ae9d-822bf84085ee",
+      "id": "3285f000-e9cb-4107-b297-92fc28a45544",
       "name": "Read me \u00b7 no credentials in exports",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -150,6 +150,6 @@
     "executionTimeout": 300
   },
   "pinData": {},
-  "versionId": "f96f98f3-703d-4296-855f-15928543d181",
+  "versionId": "0ccbe191-3cff-4fce-9601-fcccf30e90a0",
   "tags": []
 }

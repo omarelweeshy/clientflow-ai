@@ -245,6 +245,24 @@ def edit_message(message_id: str, body: EditMessage, db: Session = Depends(get_d
     return serialize(msg)
 
 
+class Reconcile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    outcome: str
+    provider_id: str | None = Field(default=None, max_length=200)
+    note: str = Field(default="", max_length=500)
+
+
+@app.get("/admin/messages/unresolved", dependencies=[Depends(security.admin)])
+def unresolved(db: Session = Depends(get_db)):
+    return [{**serialize(msg), "lead": serialize(db.get(Lead, msg.lead_id))} for msg in service.unresolved_messages(db)]
+
+
+@app.post("/admin/messages/{message_id}/reconcile", dependencies=[Depends(security.admin)])
+def reconcile_message(message_id: str, body: Reconcile, db: Session = Depends(get_db)):
+    # Registered before the generic action route so "reconcile" is not read as an action.
+    return serialize(service.reconcile(db, message_id, body.outcome, "admin", body.provider_id, body.note))
+
+
 @app.post("/admin/messages/{message_id}/{action}", dependencies=[Depends(security.admin)])
 def message_action(message_id: str, action: str, db: Session = Depends(get_db)):
     ref = db.get(Message, message_id)
@@ -372,10 +390,11 @@ def failures(db: Session = Depends(get_db)):
 
 @app.post("/automation/maintenance/tick", dependencies=[Depends(security.automation)])
 def maintenance_tick(db: Session = Depends(get_db)):
+    aged = service.reap_stuck_sending(db)
     removed = security.prune_buckets(db)
     db.commit()
-    log(logger, 20, "maintenance tick completed", rate_buckets_removed=removed)
-    return {"rate_buckets_removed": removed}
+    log(logger, 20, "maintenance tick completed", rate_buckets_removed=removed, deliveries_aged=aged)
+    return {"rate_buckets_removed": removed, "deliveries_aged": aged}
 
 
 @app.post("/automation/failures/notify", dependencies=[Depends(security.automation)])

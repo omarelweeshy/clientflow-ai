@@ -83,6 +83,10 @@ class Message(Base):
     prompt_version: Mapped[str] = mapped_column(String(30), default="response-v1")
     revisions: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    # Set when a send intent is made durable, so a process that dies mid-delivery
+    # leaves a timestamp the reaper can age out instead of a message stuck forever.
+    sending_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reconciled_by: Mapped[str | None] = mapped_column(String(80), nullable=True)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

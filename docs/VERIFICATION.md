@@ -2,6 +2,14 @@
 
 Verified locally on Windows with Docker Desktop Linux containers, 2026-10-09. This report distinguishes the working demo from external-provider and production claims.
 
+> **Scope of this record.** The results below describe the verification run made
+> before the production-hardening work on the `production-hardening` branch. That
+> branch adds structured logging, trusted-address rate limiting, a delivery
+> reconciliation path and a sixth maintenance workflow. Those changes are covered
+> by the automated test suite but have **not** been through the full manual
+> Compose, n8n and browser verification recorded here. Treat the counts below as
+> the state at the time of the run, not as current totals.
+
 ## Implemented
 
 - Next.js/TypeScript public intake, password sign-in, overview, searchable/filterable pipeline, detailed lead timeline, response editor and approval queue, automation ledger and settings.

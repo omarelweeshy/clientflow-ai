@@ -5,6 +5,8 @@ from pathlib import Path
 os.environ.setdefault("DATABASE_URL", "sqlite:///" + str(Path(tempfile.gettempdir()) / "clientflow-tests.db").replace("\\", "/"))
 os.environ["SESSION_SECRET"] = "test-session-secret-do-not-use-in-production-1234"
 os.environ["AUTOMATION_SECRET"] = "test-automation-secret-do-not-use-in-production-1234"
+# Keep the structured log stream out of test output; caplog still captures records.
+os.environ.setdefault("LOG_LEVEL", "WARNING")
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

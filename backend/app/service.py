@@ -1,11 +1,12 @@
 import hashlib
 import json
+import logging
 import re
 from datetime import timedelta, timezone
 from sqlalchemy import select
 from fastapi import HTTPException
 from . import config, providers
-from .observability import get_logger, log_exception
+from .observability import get_logger, log, log_exception
 from .models import Lead, IntakeKey, Event, Message, Opportunity, FollowUp, Run, Setting, Delivery, now, uid
 from .schemas import SettingsBody, Extraction
 
@@ -285,6 +286,84 @@ def cancel_followups(db, lead):
             msg.approval = "rejected"
 
 
+def mark_delivered(db, lead, msg, provider_id):
+    """Record a confirmed delivery and advance whatever the message was driving."""
+    msg.state, msg.error, msg.provider_id, msg.sent_at = "sent", None, provider_id, now()
+    msg.sending_since = None
+    if msg.kind == "initial":
+        lead.status = "CONTACTED"
+        for position, days in enumerate(settings(db)["followup_days"], start=1):
+            if not db.scalar(select(FollowUp).where(FollowUp.lead_id == lead.id, FollowUp.position == position)):
+                db.add(FollowUp(lead_id=lead.id, position=position, scheduled_at=now() + timedelta(days=days)))
+                event(db, lead, "followup_scheduled", {"position": position, "days": days})
+    else:
+        followup = db.scalar(select(FollowUp).where(FollowUp.lead_id == lead.id, FollowUp.position == int(msg.kind.split("_")[1])))
+        if followup:
+            followup.state, followup.error = "sent", None
+
+
+def unresolved_messages(db):
+    """Messages whose delivery outcome is not known and which nothing else can move."""
+    return db.scalars(select(Message).where(Message.state.in_(["sending", "unknown"])).order_by(Message.created_at)).all()
+
+
+def reap_stuck_sending(db, older_than_seconds=300, at=None):
+    """Age a durable send intent that no process ever finished into `unknown`.
+
+    A crash between the send-intent commit and the provider response leaves a
+    message in `sending`, which both send and the approval actions refuse to
+    touch. Without this it stays there until someone edits the database by hand.
+    """
+    cutoff = (at or now()) - timedelta(seconds=older_than_seconds)
+    moved = 0
+    for message_id in db.scalars(select(Message.id).where(Message.state == "sending", Message.sending_since <= cutoff)).all():
+        msg = db.scalar(select(Message).where(Message.id == message_id).with_for_update().execution_options(populate_existing=True))
+        if msg.state != "sending":
+            continue
+        lead = locked_lead(db, msg.lead_id)
+        msg.state = "unknown"
+        msg.error = "Delivery uncertain: the sending process did not report an outcome. Reconcile with the provider."
+        event(db, lead, "delivery_uncertain", {"message_id": msg.id, "reason": "sending_timed_out"})
+        log(logger, logging.WARNING, "aged a stuck send intent into unknown", message_id=msg.id, lead_id=lead.id)
+        moved += 1
+        db.commit()
+    return moved
+
+
+def reconcile(db, message_id, outcome, actor="admin", provider_id=None, note=""):
+    """Record the operator's finding about an uncertain delivery.
+
+    This is the only way out of `sending` or `unknown`. It does not contact the
+    provider: the operator checks the provider and states what they found.
+    """
+    if outcome not in ["delivered", "not_delivered"]:
+        raise HTTPException(422, "Outcome must be delivered or not_delivered")
+    ref = db.get(Message, message_id)
+    if not ref:
+        raise HTTPException(404, "Message not found")
+    lead = locked_lead(db, ref.lead_id)
+    msg = db.scalar(select(Message).where(Message.id == message_id).with_for_update().execution_options(populate_existing=True))
+    if msg.state not in ["sending", "unknown"]:
+        raise HTTPException(409, "This message does not need reconciliation")
+    msg.reconciled_by = actor
+    msg.sending_since = None
+    if outcome == "delivered":
+        resolved = provider_id or msg.provider_id or f"reconciled-{msg.id}"
+        if not db.get(Delivery, msg.id):
+            db.add(Delivery(message_id=msg.id, provider_id=resolved))
+            db.flush()
+        mark_delivered(db, lead, msg, resolved)
+    else:
+        msg.state = "failed"
+        msg.error = "Reconciled as not delivered. Retry when the provider is healthy."
+    for run in db.scalars(select(Run).where(Run.lead_id == lead.id, Run.workflow == "email_delivery", Run.status == "failed")):
+        run.retry_state = "resolved" if outcome == "delivered" else "available"
+    event(db, lead, "delivery_reconciled", {"message_id": msg.id, "outcome": outcome, "note": note[:200]}, actor)
+    log(logger, logging.INFO, "delivery reconciled", message_id=msg.id, lead_id=lead.id, outcome=outcome, actor=actor)
+    db.commit()
+    return msg
+
+
 def send(db, message_id, actor="admin"):
     ref = db.get(Message, message_id)
     if not ref:
@@ -312,21 +391,12 @@ def send(db, message_id, actor="admin"):
             db.add(Delivery(message_id=msg.id, provider_id=provider_id))
             db.flush()
         elif config.EMAIL_PROVIDER == "smtp":
-            msg.state = "sending"
+            msg.state, msg.sending_since = "sending", now()
             db.commit()  # Durable send intent prevents blind retries after a crash.
             provider_id = providers.smtp_send(lead, msg)
         else:
             raise ValueError("Unknown email provider")
-        msg.state, msg.error, msg.provider_id, msg.sent_at = "sent", None, provider_id, now()
-        if msg.kind == "initial":
-            lead.status = "CONTACTED"
-            for position, days in enumerate(settings(db)["followup_days"], start=1):
-                if not db.scalar(select(FollowUp).where(FollowUp.lead_id == lead.id, FollowUp.position == position)):
-                    db.add(FollowUp(lead_id=lead.id, position=position, scheduled_at=now() + timedelta(days=days)))
-                    event(db, lead, "followup_scheduled", {"position": position, "days": days})
-        else:
-            followup = db.scalar(select(FollowUp).where(FollowUp.lead_id == lead.id, FollowUp.position == int(msg.kind.split("_")[1])))
-            followup.state, followup.error = "sent", None
+        mark_delivered(db, lead, msg, provider_id)
         finish(run)
         resolve_previous(db, run)
         event(db, lead, "email_sent", {"message_id": msg.id, "provider": config.EMAIL_PROVIDER}, actor)

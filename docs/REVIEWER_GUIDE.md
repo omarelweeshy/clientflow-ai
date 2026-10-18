@@ -27,7 +27,7 @@ Scheduled n8n delivery can pick up an approved draft before you click Send. This
 - [Architecture decision](ADR-001.md): FastAPI owns business state; n8n orchestrates protected operations.
 - [API and data model](API.md): persistent records, authentication boundaries and routes.
 - [Tests](../backend/tests/test_workflow.py): deduplication, concurrency, revision approval, sequence stops and SMTP uncertainty.
-- [n8n exports](../n8n/): five inspectable workflows without embedded credentials.
+- [n8n exports](../n8n/): six inspectable workflows without embedded credentials.
 - [Verification report](VERIFICATION.md): observed local results and untested integrations.
 - [Threat model](SECURITY.md): concrete controls and deployment gaps.
 
