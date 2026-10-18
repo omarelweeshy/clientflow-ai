@@ -144,6 +144,21 @@ class Setting(Base):
     value: Mapped[dict] = mapped_column(JSON)
 
 
+class AuditEntry(Base):
+    """Append-only record of sensitive administrative actions.
+
+    Replaces a single settings row that was rewritten in full on every change,
+    which grew without bound and lost entries when two writers overlapped.
+    """
+
+    __tablename__ = "audit_entries"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    kind: Mapped[str] = mapped_column(String(80))
+    actor: Mapped[str] = mapped_column(String(80), default="admin")
+    detail: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+
+
 class RateBucket(Base):
     __tablename__ = "rate_buckets"
     key: Mapped[str] = mapped_column(String(100), primary_key=True)

@@ -3,11 +3,11 @@ import json
 import logging
 import re
 from datetime import timedelta, timezone
-from sqlalchemy import select
+from sqlalchemy import func, select
 from fastapi import HTTPException
 from . import config, providers
 from .observability import get_logger, log, log_exception
-from .models import Lead, IntakeKey, Event, Message, Opportunity, FollowUp, Run, Setting, Delivery, now, uid
+from .models import AuditEntry, Lead, IntakeKey, Event, Message, Opportunity, FollowUp, Run, Setting, Delivery, now, uid
 from .schemas import SettingsBody, Extraction
 
 logger = get_logger("clientflow.service")
@@ -28,6 +28,28 @@ STAGE_FAILURES = {
 def settings(db):
     row = db.get(Setting, "business")
     return SettingsBody.model_validate(row.value if row else {}).model_dump()
+
+
+def audit(db, kind, detail=None, actor="admin"):
+    """Append one sensitive-action record. Never rewrites earlier entries."""
+    db.add(AuditEntry(kind=kind, actor=actor, detail=detail or {}))
+
+
+def processing_duration_seconds(db):
+    """Average completed-run duration, computed in the database.
+
+    The epoch expression is dialect specific; there is no portable one. Both
+    supported dialects are handled explicitly rather than pulling every run
+    into Python.
+    """
+    dialect = db.get_bind().dialect.name
+    if dialect == "postgresql":
+        seconds = func.extract("epoch", Run.completed_at - Run.started_at)
+    elif dialect == "sqlite":
+        seconds = (func.julianday(Run.completed_at) - func.julianday(Run.started_at)) * 86400.0
+    else:
+        raise RuntimeError(f"No duration expression for dialect {dialect}")
+    return db.scalar(select(func.avg(seconds)).where(Run.completed_at.is_not(None))) or 0
 
 
 def event(db, lead, kind, detail=None, actor="system"):

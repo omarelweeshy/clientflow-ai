@@ -5,13 +5,13 @@ from fastapi import FastAPI, Depends, Request, Response, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field, ConfigDict
-from sqlalchemy import select, text
+from sqlalchemy import case, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from . import config, service, security
 from .observability import RequestContext, configure_logging, get_logger, log, log_exception
 from .db import get_db
-from .models import Lead, Event, Message, FollowUp, Opportunity, Run, Setting, now
+from .models import AuditEntry, Lead, Event, Message, FollowUp, Opportunity, Run, Setting, now
 from .schemas import Intake, SettingsBody, STATUSES
 
 configure_logging()
@@ -162,23 +162,40 @@ def detail(lead_id: str, db: Session = Depends(get_db)):
     }
 
 
+def tally(column, **conditions):
+    """COUNT of rows matching each condition, in one pass over the table."""
+    return [func.count(case((condition, 1))).label(name) for name, condition in conditions.items()] + [func.count(column).label("total")]
+
+
 @app.get("/admin/overview", dependencies=[Depends(security.admin)])
 def overview(db: Session = Depends(get_db)):
-    rows = db.scalars(select(Lead)).all()
-    runs = db.scalars(select(Run)).all()
-    completed = [r for r in runs if r.completed_at]
-    durations = [(service.aware(r.completed_at) - service.aware(r.started_at)).total_seconds() for r in completed]
+    # Aggregated in the database. Loading every lead and run into Python stopped
+    # being viable well before the table sizes a real pipeline reaches.
+    leads = db.execute(
+        select(
+            *tally(
+                Lead.id,
+                new=Lead.status == "NEW",
+                qualified=Lead.category == "high",
+                review=Lead.status == "NEEDS_REVIEW",
+                bookings=Lead.status == "BOOKED",
+                won=Lead.status == "WON",
+            )
+        )
+    ).one()
+    failed_runs = db.scalar(select(func.count(Run.id)).where(Run.status == "failed", Run.retry_state != "resolved"))
+    approval_pending = db.scalar(select(func.count(Message.id)).where(Message.approval == "pending", Message.state != "sent"))
     return {
-        "total": len(rows),
-        "new": sum(x.status == "NEW" for x in rows),
-        "qualified": sum(x.category == "high" for x in rows),
-        "review": sum(x.status == "NEEDS_REVIEW" for x in rows),
-        "bookings": sum(x.status == "BOOKED" for x in rows),
-        "conversion": round(sum(x.status == "WON" for x in rows) / max(1, len(rows)) * 100, 1),
-        "failed_runs": sum(x.status == "failed" and x.retry_state != "resolved" for x in runs),
-        "average_processing_seconds": round(sum(durations) / max(1, len(durations)), 2),
+        "total": leads.total,
+        "new": leads.new,
+        "qualified": leads.qualified,
+        "review": leads.review,
+        "bookings": leads.bookings,
+        "conversion": round(leads.won / max(1, leads.total) * 100, 1),
+        "failed_runs": failed_runs,
+        "average_processing_seconds": round(float(service.processing_duration_seconds(db)), 2),
         "estimated_ai_cost": 0 if config.LLM_PROVIDER == "mock" else None,
-        "approval_pending": len(db.scalars(select(Message).where(Message.approval == "pending", Message.state != "sent")).all()),
+        "approval_pending": approval_pending,
     }
 
 
@@ -321,15 +338,14 @@ def put_settings(body: SettingsBody, db: Session = Depends(get_db)):
         row.value = value
     else:
         db.add(Setting(key="business", value=value))
-    # Global sensitive-action audit is attached to a dedicated settings audit table via settings history.
-    audit = db.get(Setting, "audit")
-    entry = {"kind": "settings_changed", "actor": "admin", "at": now().isoformat(), "safe_automation": body.safe_automation}
-    if audit:
-        audit.value = {"events": audit.value["events"] + [entry]}
-    else:
-        db.add(Setting(key="audit", value={"events": [entry]}))
+    service.audit(db, "settings_changed", {"safe_automation": body.safe_automation}, "admin")
     db.commit()
     return {"ok": True}
+
+
+@app.get("/admin/audit", dependencies=[Depends(security.admin)])
+def audit_log(db: Session = Depends(get_db)):
+    return [serialize(row) for row in db.scalars(select(AuditEntry).order_by(AuditEntry.created_at.desc()).limit(500))]
 
 
 @app.post("/admin/followups/tick", dependencies=[Depends(security.admin)])
