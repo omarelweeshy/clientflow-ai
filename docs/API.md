@@ -2,7 +2,9 @@
 
 Interactive OpenAPI: `http://localhost:8010/docs`; JSON schema: `/openapi.json`.
 
-The frontend proxies only `/public`, `/auth`, `/admin` and `/health` to a fixed API host. It never proxies the automation namespace or forwards bearer credentials supplied by a browser.
+The frontend proxies only `/public`, `/auth`, `/admin` and `/health` to a fixed API host. It never proxies the automation namespace or forwards bearer credentials supplied by a browser. It asserts a single `X-Forwarded-For` value it determined itself and never passes one supplied by the caller, so the API can tell an asserted client address from a forged one.
+
+Every response carries `X-Correlation-ID`, matching the identifier on each structured log line for that request.
 
 | Boundary | Endpoint | Purpose |
 |---|---|---|
@@ -16,10 +18,13 @@ The frontend proxies only `/public`, `/auth`, `/admin` and `/health` to a fixed 
 | Admin | `PATCH /admin/leads/{id}` | Status, owner, reply, pause and opt-out |
 | Admin | `POST /admin/leads/{id}/retry` | Retry an unprocessed enquiry |
 | Admin | `GET /admin/messages` | Pending approval queue |
+| Admin | `GET /admin/messages/unresolved` | Deliveries whose outcome is unknown and need reconciliation |
+| Admin | `POST /admin/messages/{id}/reconcile` | Record the operator's finding: `delivered` or `not_delivered` |
 | Admin | `PATCH /admin/messages/{id}` | Save a revision and reset approval |
 | Admin | `POST /admin/messages/{id}/approve`, `/reject`, `/send` | Explicit approval and guarded delivery |
 | Admin | `GET /admin/runs`, `POST /admin/runs/{id}/retry` | Sanitized ledger and recovery |
 | Admin | `GET`, `PUT /admin/settings` | Rules, thresholds, timing and provider configuration names |
+| Admin | `GET /admin/audit` | Append-only record of sensitive administrative actions |
 | Admin | `POST /admin/followups/tick` | Prepare due drafts, applying stop and ordering checks |
 | Automation | `GET /automation/pending` | Pending IDs, no enquiry body |
 | Automation | `POST /automation/leads/{id}/process` | Idempotent process operation |
@@ -27,6 +32,9 @@ The frontend proxies only `/public`, `/auth`, `/admin` and `/health` to a fixed 
 | Automation | `POST /automation/email/tick` | Approved eligible draft delivery |
 | Automation | `POST /automation/followups/tick` | Due sequence stop checks and draft preparation |
 | Automation | `GET /automation/failures`, `POST /automation/failures/notify` | Safe errors and configured notification |
+| Automation | `POST /automation/maintenance/tick` | Ages stuck send intents into reconciliation; prunes expired rate buckets |
+| Health | `GET /health` | Liveness only; no database access |
+| Health | `GET /health/ready` | Readiness, including a database check |
 
 Administrator mutations require the session cookie, exact configured `Origin` and `X-CSRF-Token` from `/auth/session`. Automation requires `Authorization: Bearer <AUTOMATION_SECRET>`. Public intake is public by design, with durable rate counters and a honeypot; the private automation API uses a shared secret. It is not a signed public intake webhook.
 

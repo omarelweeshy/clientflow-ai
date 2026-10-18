@@ -15,6 +15,8 @@ ClientFlow AI is an independent portfolio and internal-operations project inspir
 
 **Evaluation status:** working local demo with fictional data, deterministic mock extraction and a persistent mock email outbox. Optional live providers are implemented but unverified. No paid API key is needed to evaluate it.
 
+Operational behaviour: structured JSON logs with per-request correlation identifiers, startup configuration validation that refuses to serve traffic when settings are invalid, per-client rate limiting against an address a trusted ingress asserts, an append-only administrative audit trail, and an operator reconciliation path for a delivery whose outcome is unknown. Still open before this could be called production operated: a verified live email provider, a proven backup and restore procedure, metrics and alerting, and load testing. See [security model](docs/SECURITY.md) and [verification evidence](docs/VERIFICATION.md).
+
 Start with the [five-minute reviewer guide](docs/REVIEWER_GUIDE.md), [engineering case study](docs/CASE_STUDY.md) or [verification evidence](docs/VERIFICATION.md).
 
 The [Vercel portfolio edition](docs/VERCEL.md) runs an isolated browser simulation with fictional data. The Docker edition below runs the real backend, database and n8n workflows. Public mode never connects to the private workspace or sends external messages.

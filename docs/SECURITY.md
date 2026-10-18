@@ -10,7 +10,7 @@ Trust boundaries: untrusted prospect → public form/proxy → FastAPI → Postg
 | CSRF | Strict same-site cookie, exact origin and random session token | Signed stateless sessions have no server revocation list |
 | Duplicate redelivery | Persistent key/hash, unique fingerprint, opportunity/message/sequence constraints | Probable matches require human judgment; changed enquiries are separate opportunities |
 | Concurrent actions | PostgreSQL lead/message row locks | SQLite fallback lacks equivalent concurrency semantics; production needs worker leases |
-| Spam/abuse | Server validation, 20 KB body cap, 5,000-character enquiry, honeypot, DB rate buckets | Behind the local proxy IP limit is aggregate; add trusted ingress per-IP limiting/CAPTCHA for public use |
+| Spam/abuse | Server validation, 20 KB body cap, 5,000-character enquiry, honeypot, DB rate buckets keyed per client address, plus a global backstop | Per-address limiting needs an ingress that sets a sanitised `X-Forwarded-For` and `TRUSTED_PROXY_CIDRS` naming it; without one only the backstop and per-email limits apply. No CAPTCHA |
 | Prompt injection | No model tools or approvals, strict extraction schema, code-scored decisions | Schema cannot prove factual grounding of prose; review real-model output |
 | Secret/log leakage | Environment-only credentials, safe exception messages, ID-only integration ledger | OS/Docker administrators and trusted n8n editors can read server environment |
 | Unexpected outreach | Approval default, revision resets, eligibility rechecked, sequence stop policy | Explicit safe initial-response toggle can bypass approval for eligible leads |
@@ -25,3 +25,24 @@ The local compose stack binds HTTP ports to `127.0.0.1` and leaves PostgreSQL in
 External messages can be delivered at most once in the mock transaction. Exactly-once SMTP cannot be promised. A crash after external delivery but before database commit can leave an uncertain state; never blindly reset it to draft. HubSpot upserts contacts by normalized email and does not create remote deals. Slack notifications can be duplicated following a crash because the webhook does not support idempotency.
 
 Production work: isolated asynchronous processing with leases and timeout/backoff policies; automated durable failure recovery; API pagination and large-volume analytics; dependency/security monitoring; per-user auth, MFA, revocation and session rotation; backups; retention and erasure; reliable opt-out/legal copy; email-domain authentication; provider reconciliation; verified live integrations and inbound events. This MVP has no independent penetration-test claim.
+
+## Operational logs
+
+Every request and every caught exception is written to stdout as one JSON
+object, carrying a correlation and request identifier. Log context is filtered
+by key, and values of known secret environment variables are replaced with
+`[redacted]` in both messages and stack traces.
+
+That filtering is not a guarantee. A stack trace can still contain text a
+provider chose to put in an exception, including values this application never
+configured. Treat the log stream as operator-confidential: it is a different
+trust boundary from an API response, where provider errors are replaced with
+fixed safe text.
+
+## Configuration
+
+The API refuses to start when configuration is invalid, reporting every problem
+at once rather than failing later inside a request. Checks cover secret
+lengths, the password-hash format, the public origin, a secure cookie whenever
+that origin is https, the orchestration mode, the credentials each selected
+provider requires, and the trusted proxy networks. See `app/startup.py`.
