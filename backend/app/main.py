@@ -9,15 +9,23 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from . import config, service, security
+from .observability import RequestContext, configure_logging, get_logger, log, log_exception
 from .db import get_db
 from .models import Lead, Event, Message, FollowUp, Opportunity, Run, Setting, now
 from .schemas import Intake, SettingsBody, STATUSES
+
+configure_logging()
+logger = get_logger("clientflow.api")
 
 app = FastAPI(
     title="ClientFlow AI",
     version="1.0.0",
     description="Single-organization lead automation. Public intake, administrator and shared-secret automation boundaries.",
 )
+
+# Outermost middleware, so a correlation id is bound before anything else runs
+# and every log line from a request carries it.
+app.add_middleware(RequestContext)
 
 
 @app.middleware("http")
@@ -336,14 +344,17 @@ def crm_tick(db: Session = Depends(get_db)):
 @app.post("/automation/email/tick", dependencies=[Depends(security.automation)])
 def email_tick(db: Session = Depends(get_db)):
     ids = db.scalars(select(Message.id).where(Message.approval == "approved", Message.state == "draft").limit(50)).all()
-    count = 0
+    count, skipped = 0, 0
     for message_id in ids:
         try:
             msg = service.send(db, message_id, "n8n")
             count += msg.state == "sent"
-        except HTTPException:
+        except HTTPException as exc:
+            # Expected when a stop condition or a concurrent send wins the race.
             db.rollback()
-    return {"sent": count}
+            skipped += 1
+            log(logger, 20, "email tick skipped a message", message_id=message_id, status_code=exc.status_code)
+    return {"sent": count, "skipped": skipped}
 
 
 @app.post("/automation/followups/tick", dependencies=[Depends(security.automation)])
@@ -369,6 +380,7 @@ def notify_failures(db: Session = Depends(get_db)):
             run.retry_state = "notified"
             count += 1
         except Exception:
+            log_exception(logger, "failure notification could not be delivered", run_id=run.id, lead_id=run.lead_id)
             continue
     db.commit()
     return {"notified": count}

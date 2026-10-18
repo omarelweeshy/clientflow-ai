@@ -5,8 +5,23 @@ from datetime import timedelta, timezone
 from sqlalchemy import select
 from fastapi import HTTPException
 from . import config, providers
+from .observability import get_logger, log_exception
 from .models import Lead, IntakeKey, Event, Message, Opportunity, FollowUp, Run, Setting, Delivery, now, uid
 from .schemas import SettingsBody, Extraction
+
+logger = get_logger("clientflow.service")
+
+# Stage -> (operator-safe run error, error category). The recorded cause must
+# describe the step that actually failed, not the first step that was attempted.
+STAGE_FAILURES = {
+    "extraction": ("AI extraction failed or returned invalid structured output.", "ai"),
+    "qualification": ("Qualification could not be calculated. Inspect the extracted requirements.", "qualification"),
+    "crm_sync": ("CRM synchronization step failed before completion.", "crm"),
+    "response_draft": ("Response draft could not be prepared.", "draft"),
+    "notification": ("Notification failed. Check Slack configuration.", "notification"),
+    "delivery": ("Automated delivery failed after approval. Inspect the message.", "email"),
+    "persist": ("Processing could not be saved. Retry the lead.", "database"),
+}
 
 
 def settings(db):
@@ -166,6 +181,7 @@ def sync_crm(db, lead, trigger="intake"):
         resolve_previous(db, run)
         event(db, lead, "crm_synchronized", {"provider": config.CRM_PROVIDER})
     except Exception:
+        log_exception(logger, "crm sync failed", lead_id=lead.id, provider=config.CRM_PROVIDER, run_id=run.id, trigger=trigger)
         opp.state, opp.error = "failed", "CRM provider request failed. Check configuration and retry."
         finish(run, opp.error, "crm")
         event(db, lead, "crm_failed", {"error": opp.error})
@@ -187,16 +203,20 @@ def process(db, lead_id, trigger="intake"):
     run = make_run(db, lead, "intake", trigger)
     lead.status = "PROCESSING"
     event(db, lead, "ai_extraction_attempted", {"provider": config.LLM_PROVIDER, "prompt_version": "extract-v1"})
+    stage = "extraction"
     try:
         extraction = Extraction.model_validate(providers.extractor(config.LLM_PROVIDER).extract(lead).model_dump())
         # Deterministically enforce unknown budget/deadline/context even if a provider omits them.
         missing = list(dict.fromkeys(extraction.missing_information + providers.MockExtractor().extract(lead).missing_information))
+        stage = "qualification"
         lead.requirements = extraction.model_dump()
         lead.missing, lead.urgency = missing, extraction.urgency
         qualify(lead, settings(db))
         event(db, lead, "ai_extraction_completed", {"provider": config.LLM_PROVIDER, "prompt_version": "extract-v1"})
         event(db, lead, "qualification_calculated", {"score": lead.score, "category": lead.category})
+        stage = "crm_sync"
         sync_crm(db, lead, trigger)
+        stage = "response_draft"
         message = db.scalar(select(Message).where(Message.lead_id == lead.id, Message.kind == "initial"))
         if not message:
             message = Message(lead_id=lead.id, subject=f"Your {lead.service} enquiry", content=draft_content(lead, settings(db)), provider="template")
@@ -207,6 +227,7 @@ def process(db, lead_id, trigger="intake"):
         finish(run)
         resolve_previous(db, run)
         rules = settings(db)
+        stage = "notification"
         if rules["notifications_enabled"] and lead.category == "high":
             notification = make_run(db, lead, "notification", trigger)
             try:
@@ -214,23 +235,30 @@ def process(db, lead_id, trigger="intake"):
                 finish(notification)
                 resolve_previous(db, notification)
             except Exception:
+                log_exception(logger, "slack notification failed", lead_id=lead.id, run_id=notification.id)
                 finish(notification, "Notification failed. Check Slack configuration.", "notification")
+        stage = "delivery"
         if rules["safe_automation"] and lead.category == "high" and lead.consent and not lead.opted_out:
             message.approval, message.approved_by = "approved", "safe-automation"
             event(db, lead, "response_approved", {"message_id": message.id}, "safe-automation")
             db.commit()
             send(db, message.id, "safe-automation")
         else:
+            stage = "persist"
             db.commit()
     except Exception:
+        # The stack reaches the operator log; the stored cause stays operator-safe
+        # and names the stage that actually failed rather than always blaming extraction.
+        log_exception(logger, "lead processing failed", lead_id=lead_id, stage=stage, trigger=trigger, provider=config.LLM_PROVIDER)
+        error, category = STAGE_FAILURES.get(stage, ("Processing failed at an unexpected step.", "unknown"))
         db.rollback()
         lead = locked_lead(db, lead_id)
         lead.status, lead.processed = "NEEDS_REVIEW", False
-        lead.review_reasons = ["AI extraction failed or returned an invalid schema. Retry or inspect the original enquiry."]
+        lead.review_reasons = [f"{error} Retry or inspect the original enquiry."]
         run = make_run(db, lead, "intake", trigger)
-        finish(run, "AI extraction failed or returned invalid structured output.", "ai")
+        finish(run, error, category)
         event(db, lead, "ai_extraction_attempted", {"provider": config.LLM_PROVIDER, "prompt_version": "extract-v1"})
-        event(db, lead, "ai_extraction_failed", {"error": run.error})
+        event(db, lead, "processing_failed" if stage != "extraction" else "ai_extraction_failed", {"error": error, "stage": stage})
         db.commit()
     return lead
 
@@ -304,6 +332,7 @@ def send(db, message_id, actor="admin"):
         event(db, lead, "email_sent", {"message_id": msg.id, "provider": config.EMAIL_PROVIDER}, actor)
         db.commit()
     except Exception:
+        log_exception(logger, "email delivery failed", lead_id=ref.lead_id, message_id=message_id, provider=config.EMAIL_PROVIDER, actor=actor)
         db.rollback()
         lead = locked_lead(db, ref.lead_id)
         msg = db.get(Message, message_id)
@@ -324,29 +353,41 @@ def due_followups(db, at=None):
     count = 0
     ids = db.scalars(select(FollowUp.id).where(FollowUp.scheduled_at <= at, FollowUp.state.in_(["scheduled", "pending_approval"]))).all()
     for followup_id in ids:
-        ref = db.get(FollowUp, followup_id)
-        lead = locked_lead(db, ref.lead_id)
-        followup = db.scalar(select(FollowUp).where(FollowUp.id == followup_id).with_for_update().execution_options(populate_existing=True))
-        if followup.state not in ["scheduled", "pending_approval"]:
-            continue
-        if stop_reason(lead):
-            cancel_followups(db, lead)
-        elif followup.state == "scheduled":
-            # Final follow-up is never prepared before the first is delivered.
-            prior = db.scalar(select(FollowUp).where(FollowUp.lead_id == lead.id, FollowUp.position == followup.position - 1))
-            if prior and prior.state != "sent":
-                continue
-            run = make_run(db, lead, "followup", "scheduled_tick")
-            followup.attempts += 1
-            kind = f"followup_{followup.position}"
-            if not db.scalar(select(Message).where(Message.lead_id == lead.id, Message.kind == kind)):
-                db.add(Message(lead_id=lead.id, kind=kind, subject=f"Following up: {lead.service}", content=draft_content(lead, settings(db), True)))
-                event(db, lead, "response_generated", {"type": kind})
-            followup.state = "pending_approval"
-            finish(run)
-            count += 1
-        db.commit()
+        try:
+            count += prepare_followup(db, followup_id)
+        except Exception:
+            # One unprocessable row must not stop every later follow-up in the tick.
+            log_exception(logger, "followup preparation failed", followup_id=followup_id)
+            db.rollback()
     return count
+
+
+def prepare_followup(db, followup_id):
+    """Prepare one due follow-up. Returns 1 when a draft moved to pending approval."""
+    ref = db.get(FollowUp, followup_id)
+    lead = locked_lead(db, ref.lead_id)
+    followup = db.scalar(select(FollowUp).where(FollowUp.id == followup_id).with_for_update().execution_options(populate_existing=True))
+    prepared = 0
+    if followup.state not in ["scheduled", "pending_approval"]:
+        return 0
+    if stop_reason(lead):
+        cancel_followups(db, lead)
+    elif followup.state == "scheduled":
+        # Final follow-up is never prepared before the first is delivered.
+        prior = db.scalar(select(FollowUp).where(FollowUp.lead_id == lead.id, FollowUp.position == followup.position - 1))
+        if prior and prior.state != "sent":
+            return 0
+        run = make_run(db, lead, "followup", "scheduled_tick")
+        followup.attempts += 1
+        kind = f"followup_{followup.position}"
+        if not db.scalar(select(Message).where(Message.lead_id == lead.id, Message.kind == kind)):
+            db.add(Message(lead_id=lead.id, kind=kind, subject=f"Following up: {lead.service}", content=draft_content(lead, settings(db), True)))
+            event(db, lead, "response_generated", {"type": kind})
+        followup.state = "pending_approval"
+        finish(run)
+        prepared = 1
+    db.commit()
+    return prepared
 
 
 def retry_run(db, run_id):
@@ -382,6 +423,7 @@ def retry_run(db, run_id):
             finish(new)
             resolve_previous(db, new)
         except Exception:
+            log_exception(logger, "slack notification retry failed", lead_id=lead.id, run_id=new.id)
             finish(new, "Notification failed. Check Slack configuration.", "notification")
         db.commit()
     return lead
