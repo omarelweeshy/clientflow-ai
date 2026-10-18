@@ -1,14 +1,59 @@
 import hashlib
 import hmac
+import ipaddress
+import logging
 import secrets
 from datetime import timedelta
 from fastapi import HTTPException, Request
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-from sqlalchemy import update
+from sqlalchemy import delete, update
 from sqlalchemy.exc import IntegrityError
 from . import config
 from .db import SessionLocal
 from .models import RateBucket, now
+from .observability import get_logger, log
+
+logger = get_logger("clientflow.security")
+
+
+def trusted_networks():
+    networks = []
+    for entry in config.TRUSTED_PROXY_CIDRS:
+        try:
+            networks.append(ipaddress.ip_network(entry, strict=False))
+        except ValueError:
+            log(logger, logging.WARNING, "ignoring malformed trusted proxy CIDR", entry=entry)
+    return networks
+
+
+def client_ip(request: Request):
+    """Return (address, trusted).
+
+    `trusted` is True only when a configured proxy network supplied the address.
+    Behind an ingress that does not set the client-IP header, every request
+    shares one socket peer, so an address keyed bucket would be global. Callers
+    must not apply a strict per-client limit on an untrusted address.
+    """
+    peer = request.client.host if request.client else ""
+    networks = trusted_networks()
+    if not networks:
+        return peer, False
+    try:
+        if not any(ipaddress.ip_address(peer) in network for network in networks):
+            return peer, False
+    except ValueError:
+        return peer, False
+    forwarded = request.headers.get(config.CLIENT_IP_HEADER, "")
+    if not forwarded:
+        return peer, False
+    # Right-most entry is the one appended by the single trusted hop. Anything
+    # further left was supplied by the caller and is not evidence.
+    candidate = forwarded.split(",")[-1].strip()
+    try:
+        return str(ipaddress.ip_address(candidate)), True
+    except ValueError:
+        log(logger, logging.WARNING, "trusted proxy supplied an unparseable client address")
+        return peer, False
 
 
 def hash_password(password, salt=None):
@@ -50,6 +95,26 @@ def automation(request: Request):
     expected = config.AUTOMATION_SECRET
     if len(expected) < 32 or not hmac.compare_digest(request.headers.get("authorization", ""), f"Bearer {expected}"):
         raise HTTPException(401, "Invalid automation credential")
+
+
+def limit_client(request, action, per_client, backstop, window):
+    """Rate limit one action.
+
+    A strict bucket is applied per client address when that address can be
+    trusted. A generous global backstop always applies, so a deployment without
+    a trusted proxy still has a ceiling without one caller being able to lock
+    everyone else out.
+    """
+    address, trusted = client_ip(request)
+    if trusted:
+        rate_limit(f"{action}:ip:{address}", per_client, window)
+    rate_limit(f"{action}:all", backstop, window)
+
+
+def prune_buckets(db, at=None):
+    """Delete long-expired buckets so the table does not grow without bound."""
+    cutoff = (at or now()) - timedelta(days=1)
+    return db.execute(delete(RateBucket).where(RateBucket.expires_at <= cutoff)).rowcount
 
 
 def rate_limit(key, limit, window=60):

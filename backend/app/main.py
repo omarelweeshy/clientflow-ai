@@ -70,7 +70,10 @@ class Login(BaseModel):
 
 @app.post("/auth/login")
 def login(body: Login, request: Request, response: Response):
-    security.rate_limit("login:" + request.client.host, 10, 900)
+    # Strict per address when a trusted proxy supplies it, plus a global
+    # backstop. A shared 10-per-15-minutes bucket would let any caller lock the
+    # administrator out of the dashboard.
+    security.limit_client(request, "login", per_client=10, backstop=200, window=900)
     if request.headers.get("origin") != config.PUBLIC_ORIGIN:
         raise HTTPException(403, "Origin verification failed")
     if not security.check_password(body.password):
@@ -101,7 +104,7 @@ def public_config(db: Session = Depends(get_db)):
 
 @app.post("/public/intake", status_code=201)
 def intake(body: Intake, request: Request, db: Session = Depends(get_db)):
-    security.rate_limit("intake:" + request.client.host, 60, 3600)
+    security.limit_client(request, "intake", per_client=60, backstop=2000, window=3600)
     security.rate_limit("email:" + str(body.email).lower(), 10, 3600)
     if body.honeypot:
         raise HTTPException(422, "Submission could not be accepted")
@@ -365,6 +368,14 @@ def followup_tick(db: Session = Depends(get_db)):
 @app.get("/automation/failures", dependencies=[Depends(security.automation)])
 def failures(db: Session = Depends(get_db)):
     return {"runs": [serialize(x) for x in db.scalars(select(Run).where(Run.status == "failed", Run.retry_state == "available").limit(50))]}
+
+
+@app.post("/automation/maintenance/tick", dependencies=[Depends(security.automation)])
+def maintenance_tick(db: Session = Depends(get_db)):
+    removed = security.prune_buckets(db)
+    db.commit()
+    log(logger, 20, "maintenance tick completed", rate_buckets_removed=removed)
+    return {"rate_buckets_removed": removed}
 
 
 @app.post("/automation/failures/notify", dependencies=[Depends(security.automation)])

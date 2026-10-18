@@ -10,3 +10,8 @@ ORCHESTRATION_MODE = os.getenv("ORCHESTRATION_MODE", "app")
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "mock")
 CRM_PROVIDER = os.getenv("CRM_PROVIDER", "internal")
 EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "mock")
+# Per-IP rate limiting is only sound when a trusted reverse proxy supplies the
+# client address. List the proxy networks allowed to assert it; empty means
+# trust nothing and fall back to the socket peer.
+TRUSTED_PROXY_CIDRS = [x.strip() for x in os.getenv("TRUSTED_PROXY_CIDRS", "").split(",") if x.strip()]
+CLIENT_IP_HEADER = os.getenv("CLIENT_IP_HEADER", "x-forwarded-for").lower()

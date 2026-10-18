@@ -55,6 +55,13 @@ async function proxy(
     const value = request.headers.get(key);
     if (value) headers.set(key, value);
   }
+  // The API applies per-client rate limits to the address this proxy asserts,
+  // never to a value the caller supplied. Send a single entry, or none, so the
+  // API can tell an asserted address from a forged one. The left-most entry is
+  // only trustworthy when the ingress in front of this process sanitises it.
+  const forwarded = request.headers.get("x-forwarded-for");
+  const clientAddress = (forwarded?.split(",")[0] ?? request.headers.get("x-real-ip") ?? "").trim();
+  if (clientAddress) headers.set("x-forwarded-for", clientAddress);
   try {
     const upstream = await fetch(
       `${process.env.API_INTERNAL_URL || "http://127.0.0.1:8000"}/${path.join("/")}${request.nextUrl.search}`,
