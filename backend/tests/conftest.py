@@ -1,3 +1,4 @@
+import hashlib
 import os
 import tempfile
 from pathlib import Path
@@ -8,9 +9,21 @@ os.environ["AUTOMATION_SECRET"] = "test-automation-secret-do-not-use-in-producti
 # Keep the structured log stream out of test output; caplog still captures records.
 os.environ.setdefault("LOG_LEVEL", "WARNING")
 
+# The application now refuses to start without a valid configuration, so the
+# test environment supplies one. Computed inline, before app.config is imported,
+# with the same algorithm as security.hash_password.
+TEST_PASSWORD = "test-password"
+_salt = "testsalt"
+_digest = hashlib.pbkdf2_hmac("sha256", TEST_PASSWORD.encode(), _salt.encode(), 600000).hex()
+os.environ["ADMIN_PASSWORD_HASH"] = f"pbkdf2_sha256${_salt}${_digest}"
+os.environ.setdefault("PUBLIC_ORIGIN", "http://localhost:3010")
+os.environ.setdefault("LLM_PROVIDER", "mock")
+os.environ.setdefault("CRM_PROVIDER", "internal")
+os.environ.setdefault("EMAIL_PROVIDER", "mock")
+
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-from app import config, security  # noqa: E402
+from app import config  # noqa: E402
 from app.main import app  # noqa: E402
 from app.db import Base, engine  # noqa: E402
 
@@ -22,7 +35,6 @@ def reset(monkeypatch):
         raise RuntimeError("Tests require a database URL containing test")
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
-    monkeypatch.setattr(config, "ADMIN_PASSWORD_HASH", security.hash_password("test-password"))
     monkeypatch.setattr(config, "LLM_PROVIDER", "mock")
     monkeypatch.setattr(config, "CRM_PROVIDER", "internal")
     monkeypatch.setattr(config, "EMAIL_PROVIDER", "mock")
@@ -38,7 +50,7 @@ def client():
 
 @pytest.fixture
 def admin(client):
-    result = client.post("/auth/login", json={"password": "test-password"}, headers={"Origin": config.PUBLIC_ORIGIN})
+    result = client.post("/auth/login", json={"password": TEST_PASSWORD}, headers={"Origin": config.PUBLIC_ORIGIN})
     assert result.status_code == 200
     client.headers.update({"Origin": config.PUBLIC_ORIGIN, "X-CSRF-Token": result.json()["csrf"]})
     return client

@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import case, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from . import config, service, security
+from . import config, service, security, startup
 from .observability import RequestContext, configure_logging, get_logger, log, log_exception
 from .db import get_db
 from .models import AuditEntry, Lead, Event, Message, FollowUp, Opportunity, Run, Setting, now
@@ -16,6 +16,9 @@ from .schemas import Intake, SettingsBody, STATUSES
 
 configure_logging()
 logger = get_logger("clientflow.api")
+# Refuse to serve traffic with invalid configuration rather than failing later,
+# per request, in a path that swallows the error.
+startup.check()
 
 app = FastAPI(
     title="ClientFlow AI",
@@ -58,9 +61,16 @@ async def validation_error(request, exc):
 
 
 @app.get("/health")
-def health(db: Session = Depends(get_db)):
+def health():
+    # Liveness only. Reachable without authentication through the public proxy,
+    # so it must not touch the database.
+    return {"status": "ok", "version": app.version}
+
+
+@app.get("/health/ready")
+def ready(db: Session = Depends(get_db)):
     db.execute(text("SELECT 1"))
-    return {"status": "ok"}
+    return {"status": "ready"}
 
 
 class Login(BaseModel):

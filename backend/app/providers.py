@@ -9,6 +9,14 @@ import httpx
 from .schemas import Extraction
 
 
+def required(name):
+    """Read a provider credential with a message that names the missing setting."""
+    value = os.getenv(name, "")
+    if not value:
+        raise RuntimeError(f"{name} is not configured for the selected provider")
+    return value
+
+
 class ExtractionProvider(Protocol):
     def extract(self, lead) -> Extraction: ...
 
@@ -70,7 +78,7 @@ def extractor(name):
 
 
 def hubspot_sync(lead):
-    token = os.environ["HUBSPOT_TOKEN"]
+    token = required("HUBSPOT_TOKEN")
     with httpx.Client(timeout=20) as client:
         result = client.post(
             "https://api.hubapi.com/crm/v3/objects/contacts/batch/upsert",
@@ -84,14 +92,14 @@ def hubspot_sync(lead):
 def smtp_send(lead, message):
     email = EmailMessage()
     email["Subject"] = message.subject
-    email["From"] = os.environ["SMTP_FROM"]
+    email["From"] = required("SMTP_FROM")
     email["To"] = lead.email
     email["Message-ID"] = f"<{message.id}@clientflow.local>"
     email.set_content(message.content)
-    with smtplib.SMTP(os.environ["SMTP_HOST"], int(os.getenv("SMTP_PORT", "587")), timeout=20) as smtp:
+    with smtplib.SMTP(required("SMTP_HOST"), int(os.getenv("SMTP_PORT", "587")), timeout=20) as smtp:
         smtp.starttls()
         if os.getenv("SMTP_USER"):
-            smtp.login(os.environ["SMTP_USER"], os.environ["SMTP_PASSWORD"])
+            smtp.login(required("SMTP_USER"), required("SMTP_PASSWORD"))
         smtp.send_message(email)
     return email["Message-ID"]
 
