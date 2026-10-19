@@ -22,3 +22,6 @@ local-secrets/
 .DS_Store
 Thumbs.db
 .vercel/
+
+# Local backups produced by scripts/backup.sh
+backups/

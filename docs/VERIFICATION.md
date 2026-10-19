@@ -28,6 +28,7 @@ configuration checks.
 | Structured logs | API stdout is one JSON object per line, carrying `correlation_id` and `request_id`, including uvicorn access lines |
 | Correlation header | present on direct API responses and passed through the proxy |
 | Forwarded-address handling | a request carrying a forged `X-Forwarded-For` creates no address-keyed rate bucket; only the global backstop and per-email buckets appear |
+| Backup and restore | `scripts/backup.sh` dumped the live database and the n8n volume; `scripts/restore.sh --verify` replayed the dump into a throwaway PostgreSQL and reported leads=18, messages=18, runs=47, schema=0003, matching the source |
 
 Defects found and fixed during this run, all reproduced before being corrected:
 
@@ -42,9 +43,11 @@ Defects found and fixed during this run, all reproduced before being corrected:
   choose the bucket their requests counted against. Introduced on this branch
   and fixed on it.
 
-Not covered by this run: live SMTP, HubSpot, Ollama or Slack providers; a
-proven backup and restore procedure; metrics and alerting; load testing; and
-the manual n8n and browser walkthrough recorded in the 2026-10-09 run.
+Not covered by this run: live SMTP, HubSpot, Ollama or Slack providers; metrics
+and alerting; load testing; the manual n8n and browser walkthrough recorded in
+the 2026-10-09 run; and the Oracle Cloud deployment described in
+[DEPLOY](DEPLOY.md), which is written and locally exercised but has not been run
+on a live host.
 
 ## Implemented
 

@@ -1,0 +1,42 @@
+# Production overrides, applied on top of compose.yaml:
+#   docker compose -f compose.yaml -f deploy/compose.prod.yaml up -d
+#
+# The base file publishes api, web and n8n on 127.0.0.1 only. Those bindings are
+# not reachable from outside the host, so they are left in place for debugging
+# on the VM. Caddy reaches the services over the compose network instead, and is
+# the only service bound to a public interface.
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN to the public hostname}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - caddy_logs:/var/log/caddy
+    depends_on:
+      - web
+
+  web:
+    environment:
+      # Caddy replaces X-Forwarded-For with the real peer, so the value reaching
+      # this service is evidence rather than a caller's claim.
+      TRUST_UPSTREAM_FORWARDED_FOR: "true"
+
+  api:
+    environment:
+      # Compose network ranges, so the API accepts the address the proxy asserts.
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+volumes:
+  caddy_data:
+  caddy_config:
+  caddy_logs:

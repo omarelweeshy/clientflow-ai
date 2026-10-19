@@ -1,0 +1,33 @@
+# Public entry point for the ClientFlow stack.
+#
+# The X-Forwarded-For line is the security-critical one. Caddy's default is to
+# APPEND the peer address to whatever the caller sent, so a caller supplying
+# "X-Forwarded-For: 1.2.3.4" would produce "1.2.3.4, <real peer>". The proxy
+# behind this reads the left-most entry, so the caller would be choosing the
+# address their rate limit is counted against. Setting the header replaces it
+# outright, which is what makes this a sanitising ingress and what
+# TRUST_UPSTREAM_FORWARDED_FOR=true in the web service relies on.
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	reverse_proxy web:3000 {
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up Host {host}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}
