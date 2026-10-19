@@ -101,7 +101,9 @@ def test_one_unprocessable_followup_does_not_stop_the_tick(admin, monkeypatch):
     monkeypatch.setattr(service, "prepare_followup", flaky)
     with SessionLocal() as db:
         prepared = service.due_followups(db)
-    # The tick reached the second row despite the first raising. The second
-    # prepares nothing because position 2 waits for position 1 to be delivered.
+    # Ordered by position, so this also pins the processing order that PostgreSQL
+    # previously left arbitrary. The tick reached the second row despite the
+    # first raising; the second prepares nothing because position 2 waits for
+    # position 1 to be delivered.
     assert calls == [first_id, second_id]
     assert prepared == 0

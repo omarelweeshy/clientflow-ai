@@ -3,6 +3,7 @@
 import uuid
 from datetime import timedelta
 import pytest
+from concurrent.futures import ThreadPoolExecutor
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from app import config, security
@@ -77,6 +78,47 @@ def test_global_backstop_applies_without_a_trusted_proxy(client, monkeypatch):
         client.post("/auth/login", json={"password": "wrong"}, headers={"Origin": config.PUBLIC_ORIGIN})
     with SessionLocal() as db:
         assert db.scalar(select(func.count(RateBucket.key))) == 1
+
+
+def test_concurrent_first_requests_are_not_spuriously_rejected():
+    """Several callers racing to create the same bucket must all be admitted.
+
+    The losing threads used to find the bucket the winning thread had just
+    inserted and return 429 for a request whose count was still 1.
+    """
+    import uuid as _uuid
+
+    for attempt in range(8):
+        key = f"race-{_uuid.uuid4()}"
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            outcomes = list(pool.map(lambda _: _attempt(key, limit=100), range(8)))
+        rejected = [x for x in outcomes if x == 429]
+        assert not rejected, f"attempt {attempt}: {len(rejected)} of 8 rejected below the limit"
+        with SessionLocal() as db:
+            assert db.scalar(select(RateBucket.hits).where(RateBucket.key == _hashed(key))) == 8
+
+
+def _hashed(key):
+    import hashlib
+
+    return hashlib.sha256(key.encode()).hexdigest()
+
+
+def _attempt(key, limit=100):
+    from fastapi import HTTPException
+
+    try:
+        security.rate_limit(key, limit, 3600)
+        return 200
+    except HTTPException as exc:
+        return exc.status_code
+
+
+def test_a_bucket_at_its_limit_still_rejects():
+    key = f"ceiling-{uuid.uuid4()}"
+    for _ in range(3):
+        assert _attempt(key, limit=3) == 200
+    assert _attempt(key, limit=3) == 429
 
 
 def test_expired_buckets_are_pruned(client):

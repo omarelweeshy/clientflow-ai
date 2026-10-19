@@ -129,14 +129,20 @@ def rate_limit(key, limit, window=60):
         if result.rowcount:
             db.commit()
             return
-        if db.get(RateBucket, key):
-            raise HTTPException(429, "Too many requests. Try again later.", headers={"Retry-After": str(window)})
+        # No row matched: either the bucket does not exist yet, or it is at its
+        # limit. Do not decide by looking for the row. Concurrent first requests
+        # race here, and the losers would find the bucket the winner just
+        # inserted and reject a request whose count is still 1. Attempt the
+        # insert and let the unique constraint settle the race instead.
         try:
             db.add(RateBucket(key=key, hits=1, expires_at=instant + timedelta(seconds=window)))
             db.commit()
+            return
         except IntegrityError:
             db.rollback()
-            result = db.execute(update(RateBucket).where(RateBucket.key == key, RateBucket.hits < limit).values(hits=RateBucket.hits + 1))
-            db.commit()
-            if not result.rowcount:
-                raise HTTPException(429, "Too many requests. Try again later.") from None
+        result = db.execute(update(RateBucket).where(RateBucket.key == key, RateBucket.hits < limit).values(hits=RateBucket.hits + 1))
+        db.commit()
+        if not result.rowcount:
+            # The bucket exists and the retried increment still matched nothing,
+            # so it is genuinely at its limit.
+            raise HTTPException(429, "Too many requests. Try again later.", headers={"Retry-After": str(window)}) from None

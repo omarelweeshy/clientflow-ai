@@ -338,7 +338,9 @@ def reap_stuck_sending(db, older_than_seconds=300, at=None):
     """
     cutoff = (at or now()) - timedelta(seconds=older_than_seconds)
     moved = 0
-    for message_id in db.scalars(select(Message.id).where(Message.state == "sending", Message.sending_since <= cutoff)).all():
+    for message_id in db.scalars(
+        select(Message.id).where(Message.state == "sending", Message.sending_since <= cutoff).order_by(Message.sending_since)
+    ).all():
         msg = db.scalar(select(Message).where(Message.id == message_id).with_for_update().execution_options(populate_existing=True))
         if msg.state != "sending":
             continue
@@ -443,7 +445,14 @@ def send(db, message_id, actor="admin"):
 def due_followups(db, at=None):
     at = at or now()
     count = 0
-    ids = db.scalars(select(FollowUp.id).where(FollowUp.scheduled_at <= at, FollowUp.state.in_(["scheduled", "pending_approval"]))).all()
+    # Ordered explicitly: without it PostgreSQL returns rows in whatever order it
+    # likes, so a tick could consider position 2 before position 1 and the result
+    # depended on the dialect.
+    ids = db.scalars(
+        select(FollowUp.id)
+        .where(FollowUp.scheduled_at <= at, FollowUp.state.in_(["scheduled", "pending_approval"]))
+        .order_by(FollowUp.lead_id, FollowUp.position)
+    ).all()
     for followup_id in ids:
         try:
             count += prepare_followup(db, followup_id)

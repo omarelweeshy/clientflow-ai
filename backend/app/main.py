@@ -342,14 +342,26 @@ def get_settings(db: Session = Depends(get_db)):
 def put_settings(body: SettingsBody, db: Session = Depends(get_db)):
     if body.medium_threshold >= body.high_threshold:
         raise HTTPException(422, "Medium threshold must be below high threshold")
-    row = db.get(Setting, "business")
     value = body.model_dump()
+    detail = {"safe_automation": body.safe_automation}
+    row = db.get(Setting, "business")
     if row:
         row.value = value
-    else:
+        service.audit(db, "settings_changed", detail, "admin")
+        db.commit()
+        return {"ok": True}
+    try:
         db.add(Setting(key="business", value=value))
-    service.audit(db, "settings_changed", {"safe_automation": body.safe_automation}, "admin")
-    db.commit()
+        service.audit(db, "settings_changed", detail, "admin")
+        db.commit()
+    except IntegrityError:
+        # Another writer inserted the row first. Take it under a row lock and
+        # apply this change as an update rather than returning a 500.
+        db.rollback()
+        row = db.scalar(select(Setting).where(Setting.key == "business").with_for_update().execution_options(populate_existing=True))
+        row.value = value
+        service.audit(db, "settings_changed", detail, "admin")
+        db.commit()
     return {"ok": True}
 
 

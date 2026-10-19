@@ -281,7 +281,7 @@ def test_postgres_concurrent_intake_and_send(admin):
         pytest.skip("Row-lock concurrency requires PostgreSQL")
     with ThreadPoolExecutor(max_workers=6) as pool:
         responses = list(pool.map(lambda _: submit(admin, "concurrent-intake-key"), range(6)))
-    assert all(response.status_code == 201 for response in responses)
+    assert all(response.status_code == 201 for response in responses), [r.status_code for r in responses]
     msg = get_message()
     admin.post(f"/admin/messages/{msg.id}/approve")
     with ThreadPoolExecutor(max_workers=4) as pool:
