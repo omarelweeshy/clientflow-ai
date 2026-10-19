@@ -29,6 +29,17 @@ n8n ~400 MB. Under 1 GB in total.
   A1 capacity is frequently unavailable in popular regions; expect to retry.
 - A domain name pointing an A record at the instance's public IP. Caddy obtains
   a certificate over HTTP, so port 80 must reach it. A bare IP will not work.
+
+  A free subdomain is enough to start. [DuckDNS](https://www.duckdns.org) gives
+  you `yourname.duckdns.org` and lets you point it at the instance IP; set
+  `DOMAIN` to that name and the Caddyfile here works unchanged. Most DuckDNS
+  guides reach for the DNS-01 challenge and a custom Caddy build with the
+  DuckDNS plugin, but that is only needed on home networks where port 80 is
+  closed. This instance is a public server with port 80 open, so the default
+  HTTP-01 challenge applies and no plugin is required.
+
+  Move to a domain you own before showing this to anyone outside the project.
+  Changing `DOMAIN` and restarting Caddy is the whole migration.
 - The instance is ARM. All base images used here are multi-architecture, but
   the build has not been run on arm64, so budget time for a first build.
 
