@@ -2,9 +2,9 @@
 
 Interactive OpenAPI: `http://localhost:8010/docs`; JSON schema: `/openapi.json`.
 
-The frontend proxies only `/public`, `/auth`, `/admin` and `/health` to a fixed API host. It never proxies the automation namespace or forwards bearer credentials supplied by a browser. It asserts a single `X-Forwarded-For` value it determined itself and never passes one supplied by the caller, so the API can tell an asserted client address from a forged one.
+The frontend proxies only `/public`, `/auth`, `/admin` and `/health` to a fixed API host. It never proxies the automation namespace or forwards bearer credentials supplied by a browser. It forwards a client address only when `TRUST_UPSTREAM_FORWARDED_FOR=true` declares that a sanitising ingress sits in front of it; otherwise it sends none and the API falls back to the socket peer. See [security model](SECURITY.md).
 
-Every response carries `X-Correlation-ID`, matching the identifier on each structured log line for that request.
+Every response carries `X-Correlation-ID`, matching the identifier on each structured log line for that request. The proxy passes it through, so a reported problem can be traced in the API logs without guessing.
 
 | Boundary | Endpoint | Purpose |
 |---|---|---|

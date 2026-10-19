@@ -55,13 +55,18 @@ async function proxy(
     const value = request.headers.get(key);
     if (value) headers.set(key, value);
   }
-  // The API applies per-client rate limits to the address this proxy asserts,
-  // never to a value the caller supplied. Send a single entry, or none, so the
-  // API can tell an asserted address from a forged one. The left-most entry is
-  // only trustworthy when the ingress in front of this process sanitises it.
-  const forwarded = request.headers.get("x-forwarded-for");
-  const clientAddress = (forwarded?.split(",")[0] ?? request.headers.get("x-real-ip") ?? "").trim();
-  if (clientAddress) headers.set("x-forwarded-for", clientAddress);
+  // The API applies per-client rate limits to the address this proxy asserts.
+  // A caller can put anything in X-Forwarded-For, so the value is only evidence
+  // when a sanitising ingress sits in front of this process and overwrites it.
+  // Without one, Next.js is the edge: forward nothing, let the API fall back to
+  // the socket peer, and leave per-address limiting off rather than accept a
+  // client-chosen identity. TRUST_UPSTREAM_FORWARDED_FOR is the operator
+  // asserting that such an ingress exists.
+  if (process.env.TRUST_UPSTREAM_FORWARDED_FOR === "true") {
+    const forwarded = request.headers.get("x-forwarded-for");
+    const clientAddress = (forwarded?.split(",")[0] ?? request.headers.get("x-real-ip") ?? "").trim();
+    if (clientAddress) headers.set("x-forwarded-for", clientAddress);
+  }
   try {
     const upstream = await fetch(
       `${process.env.API_INTERNAL_URL || "http://127.0.0.1:8000"}/${path.join("/")}${request.nextUrl.search}`,
@@ -83,6 +88,10 @@ async function proxy(
       outgoing.append("Set-Cookie", cookie);
     const retryAfter = upstream.headers.get("retry-after");
     if (retryAfter) outgoing.set("Retry-After", retryAfter);
+    // Pass the correlation identifier back, so a reported problem can be found
+    // in the API logs without guessing.
+    const correlation = upstream.headers.get("x-correlation-id");
+    if (correlation) outgoing.set("X-Correlation-ID", correlation);
     return new NextResponse(await upstream.text(), {
       status: upstream.status,
       headers: outgoing,

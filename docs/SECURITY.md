@@ -10,7 +10,7 @@ Trust boundaries: untrusted prospect → public form/proxy → FastAPI → Postg
 | CSRF | Strict same-site cookie, exact origin and random session token | Signed stateless sessions have no server revocation list |
 | Duplicate redelivery | Persistent key/hash, unique fingerprint, opportunity/message/sequence constraints | Probable matches require human judgment; changed enquiries are separate opportunities |
 | Concurrent actions | PostgreSQL lead/message row locks | SQLite fallback lacks equivalent concurrency semantics; production needs worker leases |
-| Spam/abuse | Server validation, 20 KB body cap, 5,000-character enquiry, honeypot, DB rate buckets keyed per client address, plus a global backstop | Per-address limiting needs an ingress that sets a sanitised `X-Forwarded-For` and `TRUSTED_PROXY_CIDRS` naming it; without one only the backstop and per-email limits apply. No CAPTCHA |
+| Spam/abuse | Server validation, 20 KB body cap, 5,000-character enquiry, honeypot, DB rate buckets keyed per client address, plus a global backstop | Per-address limiting is **off by default**: it requires both an ingress that overwrites `X-Forwarded-For` and the operator opting in with `TRUST_UPSTREAM_FORWARDED_FOR=true`, plus `TRUSTED_PROXY_CIDRS` naming the proxy network. Without that only the backstop and per-email limits apply. No CAPTCHA |
 | Prompt injection | No model tools or approvals, strict extraction schema, code-scored decisions | Schema cannot prove factual grounding of prose; review real-model output |
 | Secret/log leakage | Environment-only credentials, safe exception messages, ID-only integration ledger | OS/Docker administrators and trusted n8n editors can read server environment |
 | Unexpected outreach | Approval default, revision resets, eligibility rechecked, sequence stop policy | Explicit safe initial-response toggle can bypass approval for eligible leads |
@@ -46,3 +46,21 @@ at once rather than failing later inside a request. Checks cover secret
 lengths, the password-hash format, the public origin, a secure cookie whenever
 that origin is https, the orchestration mode, the credentials each selected
 provider requires, and the trusted proxy networks. See `app/startup.py`.
+
+## Client addresses and rate limiting
+
+A caller controls every header they send, `X-Forwarded-For` included. In the
+default Compose stack Next.js is the edge: nothing in front of it rewrites that
+header, so a value arriving there is the caller's claim, not evidence.
+
+The proxy therefore forwards no client address unless
+`TRUST_UPSTREAM_FORWARDED_FOR=true`, which is the operator asserting that a
+sanitising ingress exists. With it false the API sees only the proxy's socket
+peer, every request shares one address, and per-client limiting stays off. That
+is weaker than per-address limiting but safe: the alternative is letting a
+caller pick the bucket their requests are counted against, which defeats the
+limit entirely rather than merely coarsening it.
+
+On the API side a forwarded address is read only when the socket peer is inside
+`TRUSTED_PROXY_CIDRS`, and only the right-most entry is used, since that is the
+one a single trusted hop appends. Anything further left came from the caller.

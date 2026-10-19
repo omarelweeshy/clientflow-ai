@@ -39,6 +39,10 @@ services:
     build: ./frontend
     environment:
       API_INTERNAL_URL: http://api:8000
+      # Only "true" behind an ingress that overwrites X-Forwarded-For. In the
+      # default stack Next.js is the edge, so a caller could otherwise choose
+      # the address their rate limit is counted against.
+      TRUST_UPSTREAM_FORWARDED_FOR: ${TRUST_UPSTREAM_FORWARDED_FOR:-false}
     ports:
       - "127.0.0.1:${WEB_PORT:-3010}:3000"
     depends_on:
