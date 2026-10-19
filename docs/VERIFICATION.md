@@ -3,12 +3,48 @@
 Verified locally on Windows with Docker Desktop Linux containers, 2026-10-09. This report distinguishes the working demo from external-provider and production claims.
 
 > **Scope of this record.** The results below describe the verification run made
-> before the production-hardening work on the `production-hardening` branch. That
-> branch adds structured logging, trusted-address rate limiting, a delivery
-> reconciliation path and a sixth maintenance workflow. Those changes are covered
-> by the automated test suite but have **not** been through the full manual
-> Compose, n8n and browser verification recorded here. Treat the counts below as
-> the state at the time of the run, not as current totals.
+> on 2026-10-09, before the production-hardening work. Treat its counts as the
+> state at that time, not as current totals. A later run covering the hardening
+> work is recorded in the section immediately below.
+
+## Production-hardening verification, 2026-10-19
+
+Verified on Windows with Docker Desktop, against the rebuilt Compose stack and
+a throwaway PostgreSQL 17 container. This covers the `production-hardening`
+branch: structured logging, client-address rate limiting, delivery
+reconciliation, SQL aggregates, the append-only audit table and startup
+configuration checks.
+
+| Check | Result |
+|---|---|
+| Backend tests, PostgreSQL | 86 passed, six consecutive full-suite runs clean |
+| Backend tests, SQLite | 84 passed, 2 skipped (both require PostgreSQL) |
+| Frontend | lint, typecheck and 9 tests pass |
+| Repository scripts | `check_exports.py` (six workflows) and `scan_secrets.py` pass |
+| Migrations | `0002` and `0003` upgrade, downgrade and reapply cleanly; `0003` copies legacy audit entries from a simulated pre-0003 database with their timestamps |
+| Compose stack | rebuilt and started; `alembic_version` reports `0003`, `audit_entries` exists, `messages.sending_since` and `reconciled_by` exist |
+| Startup validation | the API refuses to start with invalid configuration and lists every problem; it accepts the real `.env`, whose quoted password hash Compose unquotes |
+| Liveness and readiness | `/health` returns without touching the database, `/health/ready` performs the database check, and the Compose healthcheck waits on readiness |
+| Structured logs | API stdout is one JSON object per line, carrying `correlation_id` and `request_id`, including uvicorn access lines |
+| Correlation header | present on direct API responses and passed through the proxy |
+| Forwarded-address handling | a request carrying a forged `X-Forwarded-For` creates no address-keyed rate bucket; only the global backstop and per-email buckets appear |
+
+Defects found and fixed during this run, all reproduced before being corrected:
+
+- `security.rate_limit` rejected concurrent first requests with 429 when
+  several callers raced to create a bucket, for a count still below the limit.
+  Pre-existing; confirmed against `main` in a separate worktree.
+- `PUT /admin/settings` returned 500 under concurrent writes, because every
+  writer tried to insert the same row. Pre-existing.
+- `due_followups` and `reap_stuck_sending` had no `ORDER BY`, so row order was
+  arbitrary on PostgreSQL. Pre-existing.
+- The proxy trusted a caller-supplied `X-Forwarded-For`, letting a caller
+  choose the bucket their requests counted against. Introduced on this branch
+  and fixed on it.
+
+Not covered by this run: live SMTP, HubSpot, Ollama or Slack providers; a
+proven backup and restore procedure; metrics and alerting; load testing; and
+the manual n8n and browser walkthrough recorded in the 2026-10-09 run.
 
 ## Implemented
 
